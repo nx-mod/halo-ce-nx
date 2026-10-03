@@ -1,0 +1,6309 @@
+[
+ [
+  "port/linux/game/network_damage.c",
+  481,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  483,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  485,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  487,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  509,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  510,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  511,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  512,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  513,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  523,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  524,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  525,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  543,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  544,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  545,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  554,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  583,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  592,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/network_damage.c",
+  593,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "port/linux/game/pal_tags.c",
+  191,
+  "address",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "port/linux/game/pal_tags.c",
+  191,
+  "address",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/ai/action_alert.c",
+  188,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/action_alert.c",
+  196,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/action_alert.c",
+  321,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/ai/ai_communication.c",
+  5419,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/ai_script.c",
+  2185,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  2186,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  2188,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  2189,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/ai_script.c",
+  2191,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/ai_script.c",
+  2272,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  2274,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  2301,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/ai_script.c",
+  2435,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  2436,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  2438,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  2440,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/ai_script.c",
+  2442,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/ai_script.c",
+  3308,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  3310,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/ai_script.c",
+  3310,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  3320,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/ai_script.c",
+  3595,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/encounters.c",
+  2623,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/encounters.c",
+  2628,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/encounters.c",
+  3041,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/encounters.c",
+  3043,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/ai/encounters.c",
+  3046,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/ai/encounters.c",
+  3056,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/bitmaps/bitmap_extract.c",
+  493,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_extract.c",
+  500,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_extract.c",
+  578,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_extract.c",
+  582,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_extract.c",
+  587,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_extract.c",
+  591,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_extract.c",
+  598,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_group.c",
+  929,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_group.c",
+  930,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_group.c",
+  934,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/bitmaps/bitmap_group.c",
+  974,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/cache/cache_files.c",
+  838,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/cache/cache_files.c",
+  858,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/camera/following_camera.c",
+  389,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/camera/following_camera.c",
+  400,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/cutscene/recorded_animations.c",
+  473,
+  "address",
+  "const struct tag_data",
+  false
+ ],
+ [
+  "source/devices/devices.c",
+  350,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/devices/devices.c",
+  364,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/devices/devices.c",
+  394,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/devices/devices.c",
+  475,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/devices/devices.c",
+  500,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/devices/devices.c",
+  501,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/devices/devices.c",
+  511,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/devices/devices.c",
+  512,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/devices/devices.c",
+  712,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/devices/devices.c",
+  713,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/decals.c",
+  785,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/decals.c",
+  1609,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/decals.c",
+  2224,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1651,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1669,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1685,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1698,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1757,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1773,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1800,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1810,
+  "name",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1810,
+  "name",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  1847,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/effects.c",
+  2084,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/weather_particle_systems.c",
+  534,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/weather_particle_systems.c",
+  642,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/weather_particle_systems.c",
+  772,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/weather_particle_systems.c",
+  887,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/effects/weather_particle_systems.c",
+  991,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/cheats.c",
+  307,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/cheats.c",
+  314,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/cheats.c",
+  353,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/cheats.c",
+  383,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  965,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  1946,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  1970,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  1973,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  3079,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  3106,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  3166,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  3168,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  4609,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  4625,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6209,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6217,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6225,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6236,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6241,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6246,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6256,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6263,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6272,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6282,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6290,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6297,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6304,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6311,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6318,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6325,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6332,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6339,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6346,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6353,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  6599,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6600,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6601,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6617,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6626,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  6635,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  7482,
+  "address",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  7510,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/game/game_engine.c",
+  7519,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  7560,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  7563,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  7579,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine.c",
+  7648,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/game/game_engine_multiplayer_sounds.c",
+  176,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine_multiplayer_sounds.c",
+  177,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine_multiplayer_sounds.c",
+  243,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/game/game_engine_multiplayer_sounds.c",
+  246,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/hs/hs.c",
+  12896,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/hs/hs.c",
+  12896,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/hs/hs.c",
+  12936,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/hs/hs.c",
+  12937,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/hs/hs.c",
+  13341,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/hs/hs.c",
+  13755,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/hs/hs.c",
+  13759,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/hs/hs.c",
+  14746,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/hs/hs_compile.c",
+  923,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/hs/hs_compile.c",
+  1091,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/hs/hs_compile.c",
+  1459,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/hs/hs_compile.c",
+  1463,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/hs/hs_compile.c",
+  1857,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/hs/hs_compile.c",
+  1861,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/hs/hs_compile.c",
+  2434,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/hs/hs_library_external.c",
+  636,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/hs/hs_library_external.c",
+  641,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  499,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  508,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  528,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  531,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  533,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  537,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  553,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  556,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  558,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  562,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  604,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  605,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  608,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  612,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  787,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  879,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1007,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1022,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1101,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1103,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1145,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1227,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1332,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1492,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1493,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1495,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1515,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1534,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1538,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1539,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1544,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1545,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1710,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1711,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1737,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1746,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1780,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1813,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  1838,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  2051,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  2061,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  2072,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/interface/first_person_weapons.c",
+  2086,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  631,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  635,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  639,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  1187,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  1221,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  1300,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  1710,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  1832,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  1834,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  1928,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  1969,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  2004,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  2041,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_draw.c",
+  2074,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  545,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  628,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  630,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  677,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  680,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  991,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1116,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1173,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1175,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1178,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1487,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1495,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1506,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1585,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1594,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1604,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_messaging.c",
+  1678,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_sounds.c",
+  74,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_sounds.c",
+  81,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_unit.c",
+  685,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_unit.c",
+  873,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_unit.c",
+  926,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_unit.c",
+  1002,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_unit.c",
+  1047,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_unit.c",
+  1091,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_unit.c",
+  1136,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_unit.c",
+  1145,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  616,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  640,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  650,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  675,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  751,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  754,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  1009,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  1011,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  1643,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  1646,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  1889,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  1892,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  1904,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  1971,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/hud_weapon.c",
+  2000,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/interface.c",
+  365,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/interface.c",
+  403,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/interface.c",
+  581,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/interface.c",
+  591,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/interface.c",
+  687,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/interface.c",
+  688,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  2198,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  2218,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3173,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3177,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3197,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3199,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3216,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3219,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3242,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3244,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3258,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3262,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3340,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3341,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3383,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3393,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3395,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3439,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3444,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3474,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3492,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3496,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3514,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3518,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3603,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3605,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3620,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  3808,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  4871,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  4882,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  4910,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  4929,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5027,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5051,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5078,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5082,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5103,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5130,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5187,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5195,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5749,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5760,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  5772,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  6359,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  6376,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/ui_widget.c",
+  6646,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  587,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  638,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  642,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  648,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  657,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  665,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  666,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  670,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  680,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  741,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  743,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  775,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  777,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  781,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  792,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  798,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  813,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  815,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  819,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  827,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  829,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  833,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  837,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  845,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  847,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  851,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  855,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  863,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  865,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  869,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/interface/virtual_keyboard.c",
+  873,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1017,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1030,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1052,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1399,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1454,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1494,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1498,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1521,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1590,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1599,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1652,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1657,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1665,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/projectiles.c",
+  1821,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  565,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  617,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  998,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  999,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1015,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1022,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1237,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1239,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1247,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/items/weapons.c",
+  1259,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1275,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/items/weapons.c",
+  1276,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/items/weapons.c",
+  1277,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/items/weapons.c",
+  1299,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1300,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/items/weapons.c",
+  1326,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1463,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1608,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  1853,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2047,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2068,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2070,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2097,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/items/weapons.c",
+  2103,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2295,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2305,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2322,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2542,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2543,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2698,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2811,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2813,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/items/weapons.c",
+  2861,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/models/model_animations.c",
+  371,
+  "address",
+  "const struct tag_data",
+  false
+ ],
+ [
+  "source/models/model_animations.c",
+  472,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/models/model_animations.c",
+  760,
+  "address",
+  "const struct tag_data",
+  false
+ ],
+ [
+  "source/models/model_animations.c",
+  863,
+  "address",
+  "const struct tag_data",
+  false
+ ],
+ [
+  "source/models/models.c",
+  372,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  434,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  437,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  576,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  583,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  645,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  652,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  670,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  678,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  968,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1327,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1334,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1337,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1347,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1351,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1494,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1497,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1617,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1886,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  1910,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2015,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2226,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2246,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2499,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2502,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2551,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2585,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2597,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2688,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/damage.c",
+  2690,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  596,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  599,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  602,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  634,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  637,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  640,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  752,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  766,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  1207,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  1211,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  1419,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  1426,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  1427,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  1431,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  1434,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  1436,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2116,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2120,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2351,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2357,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2359,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2366,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2369,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2371,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2395,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2398,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2401,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2412,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2415,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_lights.c",
+  2418,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/objects/object_types.c",
+  1160,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_types.c",
+  1366,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_types.c",
+  1400,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_types.c",
+  1408,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_types.c",
+  1412,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/object_types.c",
+  1447,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  1331,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  1387,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  1399,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  1450,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  1500,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  1503,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  1921,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2114,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2422,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2433,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2484,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2488,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2548,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2628,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2630,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2713,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2715,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2867,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2868,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2981,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2985,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2993,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  2993,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3054,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3059,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3188,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3214,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3228,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3239,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3246,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3249,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3401,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3415,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3417,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3424,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3430,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3518,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3521,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3702,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3766,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  3831,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  4882,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/objects.c",
+  4884,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/antenna.c",
+  168,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/antenna.c",
+  170,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/antenna.c",
+  187,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/antenna.c",
+  347,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/antenna.c",
+  459,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/flags.c",
+  334,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/flags.c",
+  538,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/flags.c",
+  543,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/flags.c",
+  575,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/flags.c",
+  712,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/flags.c",
+  714,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/flags.c",
+  716,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/glow.c",
+  405,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/glow.c",
+  418,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/glow.c",
+  549,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/objects/widgets/lightning.c",
+  283,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/physics/physics.c",
+  370,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/physics/physics.c",
+  457,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/physics/physics.c",
+  460,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/physics/physics.c",
+  1041,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/physics/physics.c",
+  1053,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/physics/physics.c",
+  1067,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/physics/physics.c",
+  1072,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/physics/physics.c",
+  1548,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/physics/physics.c",
+  2106,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/rasterizer.c",
+  1925,
+  "address",
+  "const struct tag_block",
+  false
+ ],
+ [
+  "source/rasterizer/rasterizer.c",
+  1927,
+  "address",
+  "const struct tag_block",
+  false
+ ],
+ [
+  "source/rasterizer/rasterizer_lights.c",
+  872,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/rasterizer_lights.c",
+  1201,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_active_camouflage.c",
+  538,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_active_camouflage.c",
+  697,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_decals.c",
+  873,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_decals.c",
+  985,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_decals.c",
+  997,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_decals.c",
+  1080,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_decals.c",
+  1083,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_detail_objects.c",
+  546,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_detail_objects.c",
+  658,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_detail_objects.c",
+  660,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_detail_objects.c",
+  665,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  650,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  652,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  660,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  672,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  683,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  694,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  819,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  828,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  872,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1121,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1225,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1343,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1408,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1416,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1572,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1584,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1596,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1608,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1829,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1837,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1889,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1890,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  1931,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2019,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2151,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2159,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2288,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2603,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2611,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2619,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2684,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2851,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2859,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2877,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2885,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2893,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2905,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  2995,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  3329,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment.c",
+  3331,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment_fog.c",
+  695,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment_fog.c",
+  704,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment_fog.c",
+  857,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment_fog.c",
+  1069,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment_fog.c",
+  1208,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment_fog.c",
+  1470,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment_fog.c",
+  1521,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_environment_fog.c",
+  1703,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  1308,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  1325,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  1345,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  1363,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  1392,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  1965,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  1982,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  1999,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  2016,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  2162,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_models.c",
+  2171,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_shadows.c",
+  506,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_shadows.c",
+  685,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_shadows.c",
+  715,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  863,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  1514,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  1547,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  1553,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  1699,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  1781,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  1812,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  1896,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  1929,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  1993,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2387,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2425,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2494,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2818,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2824,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2835,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2916,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2932,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2941,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2951,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  2976,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  3065,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  3117,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  3118,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  3126,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  3137,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c",
+  3354,
+  "index",
+  "const struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_water.c",
+  312,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_water.c",
+  706,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_water.c",
+  735,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_water.c",
+  822,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/rasterizer_xbox_water.c",
+  913,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/rasterizer/xbox/shader_transparent_generic_preprocessor.c",
+  373,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/render/render_sky.c",
+  117,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/render/render_sky.c",
+  120,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/render/render_sky.c",
+  122,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/render/render_sky.c",
+  178,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/render/render_sky.c",
+  185,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/render/render_sky.c",
+  219,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/render/render_sky.c",
+  254,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  486,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  502,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  547,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  548,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  569,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/scenario/scenario.c",
+  831,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  937,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  1037,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  1038,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  1093,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  1114,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  1262,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  1280,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  1294,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/scenario.c",
+  1393,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/scenario/scenario.c",
+  1457,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/scenario/scenario.c",
+  1468,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/wind.c",
+  214,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/wind.c",
+  217,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/wind.c",
+  294,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/wind.c",
+  386,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/scenario/wind.c",
+  389,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/shaders/shaders.c",
+  279,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1104,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1444,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1674,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1676,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1678,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1680,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1694,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1696,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1698,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  1700,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2500,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2587,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2590,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2611,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2615,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2625,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2626,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2628,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2718,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2730,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2732,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2734,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  2737,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  3034,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  3037,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  3071,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/sound/sound_manager.c",
+  3733,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/sound/sound_manager.c",
+  3752,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/structures/leaf_map.c",
+  1129,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/structures/leaf_map.c",
+  1286,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/structures/leaf_map.c",
+  1288,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/structures/structure_lens_flares.c",
+  233,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/structures/structure_lens_flares.c",
+  236,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/structures/structure_lens_flares.c",
+  267,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/structures/structure_lens_flares.c",
+  282,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/structures/structure_lens_flares.c",
+  282,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/structures/structure_lens_flares.c",
+  307,
+  "name",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/structures/structure_lens_flares.c",
+  308,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/structures/structure_lens_flares.c",
+  308,
+  "index",
+  "struct tag_reference *",
+  true
+ ],
+ [
+  "source/structures/structure_lens_flares.c",
+  319,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/structures/structure_runtime_decals.c",
+  185,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  391,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  491,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  522,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  533,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  536,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  539,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  958,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  1029,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  1048,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/structures/structure_visibility.c",
+  1587,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/structures/structures.c",
+  547,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/structures/structures.c",
+  552,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/structures/structures.c",
+  557,
+  "address",
+  "struct tag_data",
+  false
+ ],
+ [
+  "source/structures/structures.c",
+  882,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/structures/structures.c",
+  922,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  20,
+  "name",
+  "const struct tag_reference *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  22,
+  "index",
+  "const struct tag_reference *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  22,
+  "name",
+  "const struct tag_reference *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  22,
+  "index",
+  "const struct tag_reference *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  22,
+  "name",
+  "const struct tag_reference *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  22,
+  "index",
+  "const struct tag_reference *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  41,
+  "address",
+  "const struct tag_data *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  51,
+  "definition",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  51,
+  "definition",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  53,
+  "definition",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  53,
+  "name",
+  "struct tag_block_definition *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  53,
+  "definition",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  53,
+  "definition",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  53,
+  "name",
+  "struct tag_block_definition *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  53,
+  "definition",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  58,
+  "address",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/tag_files/tag_groups.c",
+  60,
+  "address",
+  "const struct tag_block *",
+  true
+ ],
+ [
+  "source/units/bipeds.c",
+  823,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/bipeds.c",
+  843,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/bipeds.c",
+  1984,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/bipeds.c",
+  1996,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/bipeds.c",
+  3604,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/unit_dialogue.c",
+  277,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/unit_dialogue.c",
+  591,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/unit_dialogue.c",
+  939,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  1305,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  1312,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  1347,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  1424,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  1425,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  1443,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  1484,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  1691,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  1701,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  2521,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  2527,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  2558,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  2687,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  2922,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3176,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3185,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  3193,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3199,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3262,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3348,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3350,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3375,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3417,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  3432,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  3449,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3488,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3505,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  3509,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3518,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  3740,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  4373,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  4406,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  4409,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  4606,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  4698,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  4706,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  4718,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  4723,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  5624,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  5624,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  6007,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  6011,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  6026,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  6135,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  6422,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  6448,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  6457,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  6572,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  6581,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  6600,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  6647,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  6788,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  7110,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  7118,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  7459,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  7691,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  7923,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  7954,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  7962,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  7969,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  8419,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8436,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  8469,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8487,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  8496,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8504,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8534,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8538,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8550,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8554,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8577,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8619,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8635,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8859,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8861,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  8867,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  9995,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10085,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10147,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10164,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10200,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10365,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  10379,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  10424,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10442,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10450,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10478,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  10488,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10503,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10523,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  10533,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10547,
+  "name",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10581,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  10635,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  10671,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  10706,
+  "address",
+  "struct tag_block *",
+  true
+ ],
+ [
+  "source/units/units.c",
+  10906,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  11367,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/units.c",
+  11413,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  449,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  454,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  467,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  469,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  499,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  501,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  914,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  957,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1072,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1244,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1297,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1316,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1367,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1397,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1400,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1411,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1413,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1419,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1421,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1432,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1434,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1448,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1450,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1461,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1463,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1468,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1470,
+  "address",
+  "struct tag_block",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1515,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1642,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1644,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1660,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1729,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1731,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1752,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1759,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1760,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1781,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1786,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1795,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1798,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1828,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1831,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1865,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1885,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  1973,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  2073,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  2114,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  2402,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  2589,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  2606,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  2693,
+  "index",
+  "struct tag_reference",
+  false
+ ],
+ [
+  "source/units/vehicles.c",
+  2701,
+  "index",
+  "struct tag_reference",
+  false
+ ]
+]
