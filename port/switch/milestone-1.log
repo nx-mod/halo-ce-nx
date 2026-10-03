@@ -1,0 +1,9 @@
+halo-ce-nx guest-poc host starting
+read guest.elf, 70612 bytes
+PT_LOAD: vaddr=0x40000000 filesz=0x1049 memsz=0x1049 -> mapping 0x2000 bytes
+guest header OK: image_end=0x40002000 import_table=0x40001038 import_names=0x40001040 import_count=1 entry=0x40000020
+resolved import 'host_log' -> 0x6ea8b7910
+mapped at 0x40000000, R-X. about to call entry 0x40000020 ...
+[guest] hello from the guest, running at a fixed low address
+entry returned.
+SUCCESS: the guest loaded, ran and called back into the host.

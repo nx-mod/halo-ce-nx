@@ -64,12 +64,20 @@ documenting as a real CFW requirement for players, not just a dev detail.
    Mesa/NVK via `libnvk`) for whatever `port/vita/platform`'s D3D8 shim
    did via sceGxm.
 
-### First concrete milestone
+### First concrete milestone - done
 
-Not the whole game yet — a minimal guest image (one function, callable
-from the host across the import boundary) loading and running end to
-end. Proves the loader/relocation/import-table plumbing before any game
-code enters the picture.
+`port/switch/guest` + `port/switch/host`, run on real hardware, first
+try (`port/switch/milestone-1.log`): guest ELF32 loads, places itself at
+`0x40000000` via the CodeMemory dance, calls back into host code through
+a resolved import stub, and the string pointer crosses the boundary and
+gets dereferenced correctly with **zero translation** - both sides see
+the same real address. The whole architecture is now proven, not just
+the memory mechanism underneath it.
+
+Currently one merged R-X segment (no mutable guest data yet - a plain
+`svcMapMemory` region, no CodeMemory dance, once there's real game
+state to place). `tools/android_imports.py`-style stub generation still
+needed once there's more than the one hand-written import.
 
 ## Unexplored
 
