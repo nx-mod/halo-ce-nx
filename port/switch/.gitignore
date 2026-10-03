@@ -3,3 +3,6 @@
 *.nro
 *.nacp
 build/
+guest/third_party/
+guest/obj/
+guest/build/

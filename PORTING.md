@@ -79,6 +79,76 @@ Currently one merged R-X segment (no mutable guest data yet - a plain
 state to place). `tools/android_imports.py`-style stub generation still
 needed once there's more than the one hand-written import.
 
+## Guest libc: musl, ported from Android's arm64_32 arch files
+
+devkitA64's own libc (newlib) is LP64-only - "incompatible" when linking
+ILP32 objects, same wall Android hit. Fix: build a minimal musl 1.2.5
+for the guest. Rather than deriving the ABI type-width table (int/long/
+pointer sizes, syscall plumbing, pthread TP access, etc.) from scratch,
+pulled Android's actual working `arm64_32` arch adaptation
+(`port/android/guest/libc/arch/arm64_32`) and retargeted it for
+devkitA64's ELF `-mabi=ilp32` instead of clang's Mach-O `arm64_32-apple-
+watchos`. Changes needed, all in `port/switch/guest/libc/arch/
+aarch64_ilp32`:
+
+- `weak_alias` back to musl's stock GNU `__attribute__((weak, alias))`
+  (Android's version spells it in Mach-O assembler, since they convert
+  to ELF afterward - we're already real ELF, no conversion needed).
+- `bits/errno.h`: copied from musl's real `arch/generic` (errno numbers
+  are universal across architectures).
+- `bits/float.h`: this one actually matters and took two tries.
+  AArch64's `long double` is genuinely 128-bit IEEE quad - not a choice,
+  `sizeof(long double) == 16` regardless of what this header claims -
+  unlike Apple's arm64_32 where it truly is 64-bit, so Android's copy
+  (claiming `LDBL_MANT_DIG 53`) doesn't fit our hardware. Using the real
+  aarch64 128-bit values fixes compilation (a `sizeof` assert in
+  `vfprintf.c`) but means musl's printf genuinely needs 128-bit
+  (`tf`-mode) soft-float arithmetic at link time, and devkitA64's
+  libgcc, same as its libc, is LP64-only. Since this game's MSVC
+  heritage means `long double` is always just `double` in practice -
+  nothing in 462K lines ever constructs a real 128-bit value - the
+  pragmatic fix is `guest_softfloat_stubs.c`: the 9 missing routines
+  (`__addtf3`, `__multf3`, `__netf2`, etc.) as loud stubs that log and
+  trap if ever actually called, rather than a real quad-math port for a
+  path nothing here exercises. If one ever fires, that assumption was
+  wrong and this needs revisiting for real.
+- `atomic_arch.h`: one clang-only builtin (`__builtin_arm_yield`, used
+  in `a_spin`) replaced with the plain `yield` instruction GCC lacks a
+  named builtin for.
+- `syscall_arch.h` needed **no changes at all** - Android's version
+  already routes every syscall through `__guest_syscall()` (implemented
+  by the guest runtime, not the arch layer), since Apple's real syscall
+  ABI isn't available to them either. Not yet implemented here - next
+  concrete task (see below).
+- `pthread_arch.h`'s thread-pointer access (`__guest_get_tp`) likewise
+  expects the guest runtime to provide it. `guest_tp.c` here is a
+  placeholder: one static zeroed `struct pthread`-sized buffer, enough
+  for single-threaded operation (errno, locale, file locking all route
+  through it). Real multithreading needs a per-host-thread one of these,
+  made when the host actually starts a thread - later.
+
+**Compiles clean: 778/778** of halo-ce-universal's curated musl file
+list (`build_musl.sh`), after additionally excluding what needs real-OS
+headers neither our arch dir nor Android's provides (confirms they
+exclude these too, not just us): `dirent/*`, `poll`/`ppoll`, `statvfs`,
+`__fdopen`/`fopencookie`/`__stdout_write`/`freopen`/`pclose`/
+`__stdio_seek`, `isatty`/`tcgetpgrp`/`tcsetpgrp`/`faccessat`/`nice`,
+`sysconf`, `__tz` (timezone - needs real zoneinfo data), the whole
+`network/*` group (real sockets are a separate, later task), plus
+`env/__libc_start_main.c` (we have our own guest entry) and
+`thread/pthread_create.c`/`thread/__syscall_cp.c` (real thread creation
+is later; cancellation points had an unrelated type-conflict bug not
+yet investigated).
+
+**Links clean**: a test program using `snprintf` (mixed format
+specifiers), `malloc`/`free`, `strcpy` resolves every symbol against
+the built `libc.a` - verified locally (`readelf`: ELF32 EXEC), not yet
+run on hardware. That's the next concrete task: a milestone-2 guest
+exercising this for real, which also needs a writable data segment
+(plain `svcMapMemory`, not the CodeMemory dance) for musl's actual
+`.data`/`.bss` and a working `__guest_syscall` (even a minimal one -
+`brk`/`mmap` for malloc's growth path is the immediate need).
+
 ## Unexplored
 
 - Whether Switch homebrew has an `mprotect`-equivalent for the desktop

@@ -26,6 +26,9 @@ Windows and the PS Vita (this repo's base); see those platforms'
 - **[cybersecurity/halo-ce-universal](https://github.com/cybersecurity/halo-ce-universal)**:
   the Linux/Windows/Android port whose platform layer, renderer and
   netcode this tree carries (`port/linux`, `port/windows`, `port/android`).
+  The Switch guest's libc (`port/switch/guest/libc`) adapts their
+  Android guest's musl port for devkitA64's ILP32 ABI.
+- **[musl](https://musl.libc.org)**: the guest's C library.
 - **[BirchWoodGod/halo-ce-vita](https://github.com/BirchWoodGod/halo-ce-vita)**:
   the PS Vita port this repo is forked from.
 - **[Xita](https://github.com/Xita-Project/xita)**: earlier Vita work
