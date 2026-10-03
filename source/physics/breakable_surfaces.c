@@ -39,7 +39,7 @@ struct breakable_surface_globals
 
 /* January evaluates the j/k terms as one group in this translation unit.
    The shared helper must remain flat for its other exact consumers. */
-static __inline real breakable_surface_plane_distance(
+__inline real breakable_surface_plane_distance(
 	real_plane3d const *plane,
 	real_point3d const *point)
 {

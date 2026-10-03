@@ -79,14 +79,14 @@ long bsp3d_clip_polygon_to_leaves_recursive(
 	bsp3d_polygon_leaf_proc proc,
 	void *context);
 
-static __inline real bsp3d_plane_distance_to_point(
+__inline real bsp3d_plane_distance_to_point(
 	real_plane3d const *plane,
 	real_point3d const *point)
 {
 	return point->x*plane->n.i + point->y*plane->n.j + point->z*plane->n.k - plane->d;
 }
 
-static __inline real bsp3d_polygon_plane_distance_to_point(
+__inline real bsp3d_polygon_plane_distance_to_point(
 	real_plane3d const *plane,
 	real_point3d const *point)
 {

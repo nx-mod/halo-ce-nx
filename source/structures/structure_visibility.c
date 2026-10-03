@@ -814,7 +814,7 @@ static boolean points_within_distance(
 	return FALSE;
 }
 
-static __inline real structure_visibility_dequantize_byte_to_real(
+__inline real structure_visibility_dequantize_byte_to_real(
 	real min,
 	real max,
 	byte value)

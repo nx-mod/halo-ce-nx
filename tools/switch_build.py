@@ -103,9 +103,11 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
     )
     # the generated halo_msvc_semantics.h's "#pragma weak NAME" lines
     # hard-error under GCC for any NAME that also ends up static - see
-    # PORTING.md. __attribute__((__weak__)) in halo_linux_prefix.h's
-    # __inline macro (HALO_SWITCH) already covers the same names more
-    # generally; this strips the now-redundant, GCC-incompatible pragmas.
+    # PORTING.md. Every ordinary game TU gives these names static linkage
+    # (halo_linux_prefix.h's plain `__inline` -> `static __inline__`), so
+    # the pragma is illegal there and this strips it. msvc_comdat.c is the
+    # one exception - it needs the *unstripped* header instead, since its
+    # own copies are never static (see generate_switch_build's comdat_* vars).
     n.rule(
         name="switch_strip_weak_pragmas",
         command="grep -v '^#pragma weak' $in > $out",
@@ -142,11 +144,25 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
     excluded = set(config.get("exclude_sources", []))
     objects: List[Path] = []
     implicit = [*xdk_headers(), prefix_header, switch_semantics_header, MUSL_LIB]
+    # msvc_comdat.c's own copies of header inline functions must stay
+    # `#pragma weak` (the unstripped header), not stripped like every other
+    # TU: in every *other* TU, halo_linux_prefix.h's __inline macro makes
+    # these names static, so GCC hard-errors on "#pragma weak" for them
+    # (hence switch_strip_weak_pragmas). But msvc_comdat.c itself redefines
+    # __inline to plain, external linkage before including the same headers
+    # (see its own comment) - so the pragma is always legal there, and it's
+    # the thing that makes this unit's copy pick-any instead of a hard
+    # conflict with the handful of names (dot_product4d, limit2d, ...) that
+    # a specific game file also defines for real, under the same name, via
+    # its own "#define NAME NAME_inline ... #undef" rename trick. Stripping
+    # the pragma here too made both copies strong -> "multiple definition".
+    comdat_implicit = [*xdk_headers(), prefix_header, linux_semantics_header, MUSL_LIB]
 
-    def add(source: Path, cflags: str) -> None:
+    def add(source: Path, cflags: str, extra_implicit: List[Path] = None) -> None:
         obj = obj_dir / source.with_suffix(".o")
         objects.append(obj)
-        n.build(outputs=obj, rule="switch_cc", inputs=source, implicit=implicit, variables={"cflags": cflags})
+        n.build(outputs=obj, rule="switch_cc", inputs=source, implicit=extra_implicit or implicit,
+                variables={"cflags": cflags})
 
     for proj in sln.projects:
         if proj.name not in config["projects"]:
@@ -160,13 +176,20 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
             abi, " ".join(SWITCH_GAME_FLAGS), f"-include {prefix_header}", f"-include {switch_semantics_header}",
             defines, f"-I{port_include}", includes, sdk_flags, musl_includes,
         ])
+        comdat_cflags = " ".join([
+            abi, " ".join(SWITCH_GAME_FLAGS), f"-include {prefix_header}", f"-include {linux_semantics_header}",
+            defines, f"-I{port_include}", includes, sdk_flags, musl_includes,
+        ])
         for obj in proj.objects:
             name = str(obj.file_path).replace(os.sep, "/")
             if obj.status.name == "Missing" or name in excluded or obj.file_path.suffix.lower() != ".c":
                 continue
             add(obj.file_path, game_cflags)
         for source in sorted(Path(config["game_sources"]).glob("*.c")):
-            add(source, game_cflags)
+            if source.name == "msvc_comdat.c":
+                add(source, comdat_cflags, extra_implicit=comdat_implicit)
+            else:
+                add(source, game_cflags)
 
     n.build(outputs="switch_guest", rule="phony", inputs=objects)
     n.newline()

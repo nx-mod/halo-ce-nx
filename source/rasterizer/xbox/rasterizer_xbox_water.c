@@ -61,7 +61,7 @@ symbols in this file:
 
 #include <math.h>
 /* The January object retains out-of-line copies of the D3D inline wrappers.
- * The stock XDK definition of D3DINLINE (static __forceinline) reproduces all
+ * The stock XDK definition of D3DINLINE (__forceinline) reproduces all
  * nine of them; the real calls below are what instantiates them. */
 #include <xtl.h>
 #include "rasterizer_xbox.h"

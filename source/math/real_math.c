@@ -15,7 +15,7 @@ REAL_MATH.C
 
 /* ---------- prototypes */
 
-static __inline real magnitude_squared3d_right_associated(
+__inline real magnitude_squared3d_right_associated(
 	real_vector3d const *vector)
 {
 	return

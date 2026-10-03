@@ -1004,7 +1004,15 @@ static boolean actor_look_find_random_vector(
  * actor_look_update, and it changes this definition's COMDAT selection from
  * no-duplicates to select-any, which csplit does not record for any function
  * (it writes no-duplicates for all 8,223), so ownership is unchanged. */
-__inline boolean valid_real_normal2d(
+/* not __inline: actor_moving.c/actors.c/units.c call this through
+actor_looking.h's plain (non-inline) prototype, so it needs real
+external linkage here - matching the original COMDAT, per this file's
+own comment above. static-by-default (HALO_SWITCH's __inline macro)
+would conflict with that prototype ("static declaration follows
+non-static declaration") - same genuine-external-linkage case as
+msvc_comdat.c handles for header-only inlines, just with the one real
+body living here instead of in a header. */
+boolean valid_real_normal2d(
 	real_vector2d const *normal)
 {
 	return valid_realcmp(magnitude_squared2d(normal), 1.0f);

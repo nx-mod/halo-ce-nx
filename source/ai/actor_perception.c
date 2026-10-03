@@ -1202,7 +1202,7 @@ real actor_look_compute_prop_interest(
 	((prop)->state >= _prop_state_becoming_unacknowledged && \
 		(prop)->state <= _prop_state_acknowledged)
 
-static __inline void actor_perception_midpoint3d(
+__inline void actor_perception_midpoint3d(
 	real_point3d const *p0,
 	real_point3d const *p1,
 	real_point3d *result)

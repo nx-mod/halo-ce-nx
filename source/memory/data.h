@@ -89,7 +89,7 @@ in this epoch carries marks (render_epoch.c), and the lookup asks whether
 the slot is one: the usual answer, an unmarked slot, read inline from the
 array's table entry (the same entry and byte render_epoch.c reads); 0 for
 anything else, which data.c's function settles */
-static __inline int datum_unmarked_inline(const struct data_array *data, short absolute_index)
+__inline int datum_unmarked_inline(const struct data_array *data, short absolute_index)
 {
 	unsigned long hint = *(const unsigned short *)((const unsigned char *)data + 38);
 
@@ -103,7 +103,7 @@ static __inline int datum_unmarked_inline(const struct data_array *data, short a
 	return 0;
 }
 
-static __inline void *datum_get_inline(struct data_array *data, long index)
+__inline void *datum_get_inline(struct data_array *data, long index)
 {
 	short absolute_index = (short)index;
 	short identifier = (short)(index >> 16);
@@ -119,7 +119,7 @@ static __inline void *datum_get_inline(struct data_array *data, long index)
 	return datum_get(data, index);
 }
 
-static __inline void *datum_try_and_get_inline(struct data_array *data, long index)
+__inline void *datum_try_and_get_inline(struct data_array *data, long index)
 {
 	short absolute_index = (short)index;
 	short identifier = (short)(index >> 16);

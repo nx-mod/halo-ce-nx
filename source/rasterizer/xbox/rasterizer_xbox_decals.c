@@ -131,7 +131,7 @@ symbols in this file:
 #include "memory/data.h"
 #include "memory/lruv_cache.h"
 #include "rasterizer/rasterizer.h"
-/* The XDK's stock D3DINLINE (static __forceinline) definitions supply both the
+/* The XDK's stock D3DINLINE (__forceinline) definitions supply both the
  * inline expansions used below and the out-of-line wrapper bodies January
  * retains in this object. Do not redefine D3DINLINE, take a wrapper's address
  * or hand-write a wrapper body: any of those changes the emitted ABI. */

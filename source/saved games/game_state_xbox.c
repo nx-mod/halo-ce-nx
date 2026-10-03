@@ -149,7 +149,7 @@ static HANDLE game_state_open_persistent_storage(
 #ifdef HALO_LINUX
 static void delete_persistent_storage(
 	void);
-static __inline boolean game_state_get_persistent_storage_path(
+__inline boolean game_state_get_persistent_storage_path(
 	char *path);
 /* bumped whenever this program writes or deletes the campaign save */
 static unsigned long game_state_persistent_storage_generation = 1;
@@ -660,7 +660,7 @@ const char *game_state_get_persistent_storage_filename(
 	return "savegame.bin";
 }
 
-static __inline boolean game_state_get_persistent_storage_path(
+__inline boolean game_state_get_persistent_storage_path(
 	char *path)
 {
 	boolean result;

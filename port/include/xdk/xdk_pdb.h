@@ -1655,7 +1655,17 @@ long __stdcall D3DTexture_GetSurfaceLevel(struct D3DTexture *, unsigned int, str
 void __stdcall D3DTexture_LockRect(struct D3DTexture *, unsigned int, struct _D3DLOCKED_RECT *, const struct tagRECT *, unsigned long);
 void __stdcall D3DVertexBuffer_Lock(struct D3DVertexBuffer *, unsigned int, unsigned int, unsigned char **, unsigned long);
 void __stdcall D3DVolumeTexture_LockBox(struct D3DVolumeTexture *, unsigned int, struct _D3DLOCKED_BOX *, const struct _D3DBOX *, unsigned long);
+#ifndef HALO_SWITCH
+/* xdk_d3d8.h's own D3DXINLINE definition (a real body, static per TU)
+is the only declaration this clashes with elsewhere. clang tolerates
+the resulting "static declaration follows non-static declaration";
+GCC (HALO_SWITCH) treats it as a hard error, so this one and
+D3DDevice_SetRenderState below (xdk_d3d8.h: D3DINLINE) are the only 2
+of this header's 261 generated declarations that need dropping - see
+PORTING.md. Not worth teaching tools/xdk_headers.py's generator about
+this for 2 names; regenerating would need re-adding this exclusion. */
 D3DXMATRIX *D3DXMatrixIdentity(D3DXMATRIX *);
+#endif
 D3DXMATRIX *__stdcall D3DXMatrixOrthoLH(D3DXMATRIX *, float, float, float, float);
 D3DXMATRIX *__stdcall D3DXMatrixPerspectiveLH(D3DXMATRIX *, float, float, float, float);
 struct D3DXVECTOR4 *__stdcall D3DXVec4Transform(struct D3DXVECTOR4 *, const struct D3DXVECTOR4 *, const D3DXMATRIX *);
@@ -1808,6 +1818,9 @@ unsigned int __stdcall socket(int, int, int);
 
 /* functions the SDK defined inline (see xdk_d3d8.h) */
 
+#ifndef HALO_SWITCH
+/* see the matching #ifndef around D3DXMatrixIdentity above */
 void __stdcall D3DDevice_SetRenderState(enum _D3DRENDERSTATETYPE, unsigned long);
+#endif
 
 #endif

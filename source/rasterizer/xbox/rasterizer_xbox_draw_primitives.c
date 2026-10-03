@@ -220,7 +220,7 @@ symbols in this file:
 #include "rasterizer_geometry.h"
 #include "rasterizer_xbox_draw_primitives.h"
 /* The January object retains out-of-line copies of the D3D inline wrappers.
- * The stock XDK definition of D3DINLINE (static __forceinline) reproduces all
+ * The stock XDK definition of D3DINLINE (__forceinline) reproduces all
  * of them; do not replace them with handwritten Microsoft dispatchers, take
  * their address or weaken __forceinline, as any of those changes the emitted
  * ABI and code shape.

@@ -515,13 +515,13 @@ are the header lookup (datum_get, itself inline in data.h for the usual
 case) and assertions, which release builds do not check, so these return
 the same; the Vita build, without link-time optimisation, made a call into
 objects.c for every object_get in the tick. */
-static __inline void *object_get_and_verify_type_inline(long object_index, unsigned long valid_type_flags)
+__inline void *object_get_and_verify_type_inline(long object_index, unsigned long valid_type_flags)
 {
 	(void)valid_type_flags;
 	return object_header_get(object_index)->datum;
 }
 
-static __inline void *object_try_and_get_and_verify_type_inline(long object_index, unsigned long valid_type_flags)
+__inline void *object_try_and_get_and_verify_type_inline(long object_index, unsigned long valid_type_flags)
 {
 	struct object_header_datum *header = object_header_try_and_get(object_index);
 	void *result = NULL;
@@ -531,7 +531,7 @@ static __inline void *object_try_and_get_and_verify_type_inline(long object_inde
 	return result;
 }
 
-static __inline void *object_header_block_get_inline(long object_index, struct object_header_block_reference *reference)
+__inline void *object_header_block_get_inline(long object_index, struct object_header_block_reference *reference)
 {
 	struct object_header_datum *header = object_header_get(object_index);
 

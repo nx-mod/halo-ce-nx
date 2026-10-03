@@ -29,7 +29,7 @@ documentation; each group names its source. The platform layer
 including this header (rasterizer_xbox_vertex_shaders_initialize.c wants
 plain static copies) */
 #ifndef D3DINLINE
-#define D3DINLINE static __forceinline
+#define D3DINLINE __forceinline
 #endif
 
 /* how D3DX's inline functions are defined (the D3DX math functions the

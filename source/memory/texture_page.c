@@ -320,7 +320,7 @@ static void code_0010f570(
 	return;
 }
 
-static __inline struct texture_page *texture_page_verify_and_return(
+__inline struct texture_page *texture_page_verify_and_return(
 	struct texture_page *texture_page)
 {
 	code_0010f570(texture_page);

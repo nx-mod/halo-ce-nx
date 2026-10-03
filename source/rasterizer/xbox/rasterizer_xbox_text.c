@@ -45,7 +45,7 @@ symbols in this file:
 #include "cseries/errors.h"
 #include "real_math.h"
 /* The January object retains out-of-line copies of the D3D inline wrappers.
- * The stock XDK definition of D3DINLINE (static __forceinline) reproduces all
+ * The stock XDK definition of D3DINLINE (__forceinline) reproduces all
  * nine wrappers, including IDirect3DDevice8_SetRenderState's 0x220-byte body.
  * Do not replace them with handwritten Microsoft dispatchers or override the
  * XDK's inline policy: taking an address or weakening __forceinline changes

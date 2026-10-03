@@ -81,37 +81,53 @@ MSVC gives C `__inline` functions COMDAT (pick-any) linkage. ELF C has no
 equivalent, so every translation unit gets its own private copy instead.
 Clang only warns about the resulting `static static`. */
 
-#if defined(HALO_SWITCH)
-/* GCC (devkitA64; every other platform here uses clang) hard-errors on
-`#pragma weak NAME` for a NAME that already has internal (static)
-linkage ("weak declaration of NAME must be public") - not a warning,
-unconditional, regardless of pragma placement (verified). The
-generated halo_msvc_semantics.h's `#pragma weak` list is exactly that
-situation for every such name, so the Switch build skips including
-its COMDAT section (tools/switch_msvc_semantics.py, if/when this
-becomes a real build step) and instead puts the weak attribute
-directly on the declaration, which GCC only warns about
-(-Wattributes, silenced by -w) - verified too. */
-/* No forced `static` here (unlike the other platforms' plain
-"static __inline__"): plenty of the source already writes
-`static __inline` itself (it's genuinely both, in MSVC terms), which
-would double up into "static static" - a GCC hard error, not just a
-clang warning like the other static-static case above. __weak__
-alone already gives every TU's copy pick-any (COMDAT-equivalent)
-linkage, whether or not the source's own "static" is present too:
-weak + the source's own static compiles fine (just a warning, also
-GCC-only, silenced by -w) - verified. __weak__/__always_inline__, not
-weak/always_inline: musl's own #define weak __attribute__((__weak__))
-(src/include/features.h) would otherwise expand the bare word again
-inside this attribute list. */
-#define __inline __inline__ __attribute__((__weak__))
-#define _inline __inline__ __attribute__((__weak__))
-#define __forceinline __inline__ __attribute__((__weak__, __always_inline__))
-#else
+/* Same macro as every platform - see the long history in PORTING.md
+for the two dead ends tried first and why they were wrong:
+
+1. `#pragma weak NAME` for a NAME that already has internal (static)
+   linkage is a GCC hard error ("weak declaration of NAME must be
+   public"), unconditionally, regardless of pragma placement - not
+   just a warning like it is under clang. The generated
+   halo_msvc_semantics.h's whole "COMDAT inline functions" section is
+   exactly this situation, for every name in it - skipped for Switch
+   (`switch_strip_weak_pragmas` in tools/switch_build.py).
+2. Tried putting `__attribute__((weak))` directly on the declaration
+   instead (GCC only warns about that one, -Wattributes, silenced by
+   -w) and dropping the forced `static` to avoid "static static"
+   (plenty of the source already writes `static __inline` itself).
+   Wrong: under -std=gnu89 specifically (required project-wide, not
+   a Switch-only thing), GCC's old GNU89 inline semantics give a
+   plain (non-static) `inline` function strong external linkage
+   REGARDLESS of an attached weak attribute - confirmed directly
+   (`nm`: `T`/`g`, not `W`/`w`). Silent at compile time, only visible
+   at link time as "multiple definition" once two translation units
+   both include a header with such a function's body - which is
+   exactly why milestone 3's compile-only testing never caught it.
+
+The actual fix doesn't touch this macro at all: `static` is what
+every platform already correctly relies on to avoid the multiple-
+definition case (each TU's copy becomes link-invisible, no clash -
+weak-via-attribute was never needed for that, and doesn't work under
+gnu89 anyway). The narrow opposite case - a name declared `__inline`
+with no body in most units, needing to resolve against the one real
+body elsewhere - is already handled, on every platform including this
+one, by `port/linux/game/msvc_comdat.c` (`#undef`s `__inline`/
+`__forceinline` itself, first, so its own inclusion of the relevant
+headers gets real external definitions) and `tools/linux_link_check.py`.
+Nothing Switch-specific needed there either.
+
+The only genuine Switch-only wrinkle is the literal duplicate keyword:
+`static` (from this macro) + `static` (already in the source, for
+functions that generally are both in MSVC terms) is a hard GCC error
+("duplicate 'static'"), not just a clang warning. Can't fix from
+inside a macro (no way to detect what already precedes the expansion
+point) - fixed instead by removing the now-redundant explicit `static`
+from the ~20 affected lines directly (`static __inline` -> `__inline`;
+the macro already supplies it) - zero behavior change on any platform,
+since the expansion is identical either way once there's only one. */
 #define __inline static __inline__
 #define _inline static __inline__
 #define __forceinline static __inline__ __attribute__((always_inline))
-#endif
 
 /* An inline function that also has an ordinary prototype keeps external
 linkage; the generated halo_msvc_semantics.h marks every inline function

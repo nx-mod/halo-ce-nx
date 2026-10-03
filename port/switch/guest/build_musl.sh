@@ -58,6 +58,33 @@ text = re.sub(
 open(path, "w").write(text)
 ' "$MUSL/$f"
 	done
+
+	# game code's own __inline -> "static __inline__" (MSVC comdat
+	# emulation, halo_linux_prefix.h) collides with these musl *public*
+	# headers' own "static __inline" the same way it collided with the
+	# real math.h (port/linux/include/math.h already guards that one
+	# with the same push_macro/pop_macro trick - these four have no
+	# game-side wrapper header to do it in, so it happens here instead).
+	# Whole-file scope (push right after the include guard, pop right
+	# before its outermost #endif), not per-line: neutralizing __inline's
+	# MSVC meaning is always safe for musl's own content, never needed
+	# there, regardless of how many "static __inline"s a given file has.
+	for f in include/ctype.h include/sched.h include/byteswap.h include/endian.h; do
+		python3 -c '
+import sys
+path = sys.argv[1]
+lines = open(path).read().split("\n")
+for i, l in enumerate(lines):
+    if l.startswith("#define") and l.rstrip().endswith("_H"):
+        lines[i:i+1] = [l, "#pragma push_macro(\"__inline\")", "#undef __inline"]
+        break
+for i in range(len(lines) - 1, -1, -1):
+    if lines[i].strip():
+        lines[i:i] = ["#pragma pop_macro(\"__inline\")"]
+        break
+open(path, "w").write("\n".join(lines))
+' "$MUSL/$f"
+	done
 fi
 
 mkdir -p obj/include/bits "$OBJDIR"

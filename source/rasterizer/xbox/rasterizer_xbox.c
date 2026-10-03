@@ -416,7 +416,7 @@ extern int halo_epoch_threaded;
 #include "render/render_cameras.h"
 
 /* The January object retains out-of-line copies of the D3D inline wrappers.
- * The stock XDK definition of D3DINLINE (static __forceinline) reproduces
+ * The stock XDK definition of D3DINLINE (__forceinline) reproduces
  * them; do not replace them with handwritten Microsoft dispatchers or
  * override the XDK's inline policy: taking an address or weakening
  * __forceinline changes their emitted ABI and code shape. */
