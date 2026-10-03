@@ -1,20 +1,16 @@
 /*
 HOST_MAIN.C
 
-Loads port/switch/guest/guest.elf (the first milestone - PORTING.md),
-places it at its linked address with real memory (the mechanism
-nx-mapmem-poc validated end to end: svcCreateCodeMemory +
-svcControlCodeMemory's MapOwner/MapSlave dance - see that repo's commit
-history for the two gotchas: cache maintenance, and writing through the
-owner view, not the pre-create source buffer), resolves its one import,
-and calls its entry point.
-
-Everything here is a single R-X segment on purpose, including the
-import table: the host patches it in before transitioning to the
-executable (MapSlave) view, and the guest only ever reads it, never
-writes. A real game needs a separate writable data segment too (a plain
-svcMapMemory region, no CodeMemory dance) - follows once there's mutable
-guest state to place.
+Loads port/switch/guest/guest.elf and runs it (PORTING.md's milestones).
+Two real segments now (milestone 2): the executable one (.guest_header,
+.text) placed via svcCreateCodeMemory + svcControlCodeMemory's
+MapOwner/MapSlave dance (the mechanism nx-mapmem-poc validated - see its
+commit history for the two gotchas: cache maintenance, and writing
+through the owner view, not the pre-create source buffer), and the
+writable one (.rodata, import table/names, .data, .bss, and a 32 MiB
+heap - guest_syscall.c's mmap bump allocator hands it out) placed with
+plain svcMapMemory, no CodeMemory dance needed since nothing in it ever
+needs to execute.
 */
 
 #include <elf.h>
@@ -51,6 +47,19 @@ static void host_log_impl(const char *text)
 	logf_both("[guest] %s\n", text);
 }
 
+/* length-explicit, not NUL-terminated - the guest's write()/writev()
+(guest_syscall.c) route stdout/stderr here */
+static void host_write_impl(const char *data, long long length)
+{
+	if (g_log)
+	{
+		fwrite(data, 1, (size_t)length, g_log);
+		fflush(g_log);
+		fsdevCommitDevice("sdmc");
+	}
+	fwrite(data, 1, (size_t)length, stderr);
+}
+
 struct host_function
 {
 	const char *name;
@@ -59,6 +68,7 @@ struct host_function
 
 static const struct host_function kHostFunctions[] = {
 	{"host_log", (void *)host_log_impl},
+	{"host_write", (void *)host_write_impl},
 };
 
 static void *resolve_import(const char *name)
@@ -71,20 +81,49 @@ static void *resolve_import(const char *name)
 
 /* ---------- loading */
 
+/* RAII would be nice; this is C. Everything that needs cleanup on every
+exit path is tracked here and torn down once, at the bottom. */
+struct guest_state
+{
+	unsigned char *file_data;
+	void *data_heap;
+	void *data_view; /* == data_heap's vaddr once mapped; NULL before */
+	uint32_t data_vaddr, data_size;
+	void *code_owner_src;
+	void *code_owner_view;
+	Handle code_handle;
+	int code_handle_valid;
+	uint32_t code_vaddr, code_size;
+};
+
+static void teardown(struct guest_state *gs)
+{
+	if (gs->data_view)
+		svcUnmapMemory((void *)(uintptr_t)gs->data_vaddr, gs->data_heap, gs->data_size);
+	free(gs->data_heap);
+	if (gs->code_handle_valid)
+	{
+		svcControlCodeMemory(gs->code_handle, CodeMapOperation_UnmapSlave,
+			(void *)(uintptr_t)gs->code_vaddr, gs->code_size, 0);
+		if (gs->code_owner_view)
+			svcControlCodeMemory(gs->code_handle, CodeMapOperation_UnmapOwner,
+				gs->code_owner_view, gs->code_size, 0);
+		svcCloseHandle(gs->code_handle);
+	}
+	free(gs->code_owner_src);
+	free(gs->file_data);
+}
+
 static int load_and_run_guest(const char *path)
 {
+	struct guest_state gs = {0};
 	FILE *file;
 	long file_size;
-	unsigned char *file_data;
 	Elf32_Ehdr *ehdr;
 	Elf32_Phdr *phdrs;
-	Elf32_Phdr *load_segment = NULL;
-	size_t mapped_size;
-	void *owner_src;
-	void *owner_view;
-	Handle code_handle;
-	Result rc;
+	Elf32_Phdr *exec_segment = NULL, *data_segment = NULL;
 	const struct guest_header *header_in_file;
+	Result rc;
 	int missing_imports = 0;
 
 	file = fopen(path, "rb");
@@ -96,114 +135,73 @@ static int load_and_run_guest(const char *path)
 	fseek(file, 0, SEEK_END);
 	file_size = ftell(file);
 	fseek(file, 0, SEEK_SET);
-	file_data = malloc(file_size);
-	if (!file_data || fread(file_data, 1, file_size, file) != (size_t)file_size)
+	gs.file_data = malloc(file_size);
+	if (!gs.file_data || fread(gs.file_data, 1, file_size, file) != (size_t)file_size)
 	{
 		logf_both("can't read %s\n", path);
 		fclose(file);
+		teardown(&gs);
 		return -1;
 	}
 	fclose(file);
 	logf_both("read guest.elf, %ld bytes\n", file_size);
 
-	ehdr = (Elf32_Ehdr *)file_data;
+	ehdr = (Elf32_Ehdr *)gs.file_data;
 	if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) || ehdr->e_ident[EI_CLASS] != ELFCLASS32 ||
 		ehdr->e_machine != EM_AARCH64 || ehdr->e_type != ET_EXEC)
 	{
 		logf_both("guest.elf is not an ILP32 AArch64 executable\n");
-		free(file_data);
+		teardown(&gs);
 		return -1;
 	}
 
-	phdrs = (Elf32_Phdr *)(file_data + ehdr->e_phoff);
+	phdrs = (Elf32_Phdr *)(gs.file_data + ehdr->e_phoff);
 	for (int i = 0; i < ehdr->e_phnum; i++)
 	{
-		if (phdrs[i].p_type == PT_LOAD)
-		{
-			if (load_segment)
-			{
-				logf_both("guest.elf has more than one PT_LOAD segment - this loader only "
-					"handles the single merged RWX segment of the first milestone\n");
-				free(file_data);
-				return -1;
-			}
-			load_segment = &phdrs[i];
-		}
+		if (phdrs[i].p_type != PT_LOAD)
+			continue;
+		if (phdrs[i].p_flags & PF_X)
+			exec_segment = &phdrs[i];
+		else
+			data_segment = &phdrs[i];
 	}
-	if (!load_segment)
+	if (!exec_segment || !data_segment)
 	{
-		logf_both("guest.elf has no PT_LOAD segment\n");
-		free(file_data);
-		return -1;
-	}
-	if (load_segment->p_vaddr != GUEST_IMAGE_BASE)
-	{
-		logf_both("guest.elf's segment is at 0x%x, expected 0x%x\n",
-			load_segment->p_vaddr, GUEST_IMAGE_BASE);
-		free(file_data);
+		logf_both("guest.elf needs exactly one executable and one non-executable PT_LOAD "
+			"segment, found exec=%p data=%p\n", (void *)exec_segment, (void *)data_segment);
+		teardown(&gs);
 		return -1;
 	}
 
-	mapped_size = (load_segment->p_memsz + 0xfff) & ~0xfffu;
-	logf_both("PT_LOAD: vaddr=0x%x filesz=0x%x memsz=0x%x -> mapping 0x%zx bytes\n",
-		load_segment->p_vaddr, load_segment->p_filesz, load_segment->p_memsz, mapped_size);
+	gs.code_vaddr = exec_segment->p_vaddr;
+	gs.code_size = (exec_segment->p_memsz + 0xfff) & ~0xfffu;
+	gs.data_vaddr = data_segment->p_vaddr;
+	gs.data_size = (data_segment->p_memsz + 0xfff) & ~0xfffu;
+	logf_both("exec segment: vaddr=0x%x filesz=0x%x memsz=0x%x\n",
+		exec_segment->p_vaddr, exec_segment->p_filesz, exec_segment->p_memsz);
+	logf_both("data segment: vaddr=0x%x filesz=0x%x memsz=0x%x (includes the guest heap)\n",
+		data_segment->p_vaddr, data_segment->p_filesz, data_segment->p_memsz);
 
-	owner_src = aligned_alloc(0x1000, mapped_size);
-	if (!owner_src)
+	/* ---------- the data segment: plain svcMapMemory, no CodeMemory dance */
+
+	gs.data_heap = aligned_alloc(0x1000, gs.data_size);
+	if (!gs.data_heap)
 	{
-		logf_both("aligned_alloc(0x%zx) failed\n", mapped_size);
-		free(file_data);
+		logf_both("aligned_alloc(0x%x) for the data segment failed\n", gs.data_size);
+		teardown(&gs);
 		return -1;
 	}
-
-	rc = svcCreateCodeMemory(&code_handle, owner_src, mapped_size);
-	if (R_FAILED(rc))
-	{
-		logf_both("svcCreateCodeMemory FAILED, rc=0x%x\n", rc);
-		free(owner_src);
-		free(file_data);
-		return -1;
-	}
-
-	virtmemLock();
-	owner_view = virtmemFindCodeMemory(mapped_size, 0x1000);
-	virtmemUnlock();
-	if (!owner_view)
-	{
-		logf_both("virtmemFindCodeMemory failed\n");
-		svcCloseHandle(code_handle);
-		free(owner_src);
-		free(file_data);
-		return -1;
-	}
-
-	rc = svcControlCodeMemory(code_handle, CodeMapOperation_MapOwner, owner_view, mapped_size, Perm_Rw);
-	if (R_FAILED(rc))
-	{
-		logf_both("MapOwner FAILED, rc=0x%x\n", rc);
-		svcCloseHandle(code_handle);
-		free(owner_src);
-		free(file_data);
-		return -1;
-	}
-
-	/* the lesson from nx-mapmem-poc: write through the owner view, not
-	owner_src - the pre-create buffer's content never reaches the real
-	backing. */
-	memset(owner_view, 0, mapped_size);
-	memcpy(owner_view, file_data + load_segment->p_offset, load_segment->p_filesz);
+	memset(gs.data_heap, 0, gs.data_size);
+	memcpy(gs.data_heap, gs.file_data + data_segment->p_offset, data_segment->p_filesz);
 
 	/* the header is link-time-constant content, already correct in the
-	file at its linked offsets - read it straight from the file buffer
-	rather than re-deriving addresses. */
-	header_in_file = (const struct guest_header *)(file_data + load_segment->p_offset);
+	file at its linked offsets - read it from the file buffer rather
+	than re-deriving addresses (it lives in the exec segment). */
+	header_in_file = (const struct guest_header *)(gs.file_data + exec_segment->p_offset);
 	if (header_in_file->magic != GUEST_MAGIC || header_in_file->abi_version != GUEST_ABI_VERSION)
 	{
 		logf_both("guest.elf's header doesn't match this host (magic/version)\n");
-		svcControlCodeMemory(code_handle, CodeMapOperation_UnmapOwner, owner_view, mapped_size, 0);
-		svcCloseHandle(code_handle);
-		free(owner_src);
-		free(file_data);
+		teardown(&gs);
 		return -1;
 	}
 	logf_both("guest header OK: image_end=0x%x import_table=0x%x import_names=0x%x "
@@ -211,11 +209,12 @@ static int load_and_run_guest(const char *path)
 		header_in_file->image_end, header_in_file->import_table, header_in_file->import_names,
 		header_in_file->import_count, header_in_file->entry);
 
-	/* resolve imports, writing resolved addresses through owner_view at
-	the same vaddr-relative offset the guest will read them from */
+	/* resolve imports, writing resolved addresses into the data heap
+	while it's still ours to write - once svcMapMemory moves it, this
+	pointer stops being valid (nx-mapmem-poc's lesson, again) */
 	{
-		uint64_t *table = (uint64_t *)((char *)owner_view + (header_in_file->import_table - GUEST_IMAGE_BASE));
-		const char *name = (const char *)owner_view + (header_in_file->import_names - GUEST_IMAGE_BASE);
+		uint64_t *table = (uint64_t *)((char *)gs.data_heap + (header_in_file->import_table - gs.data_vaddr));
+		const char *name = (const char *)gs.data_heap + (header_in_file->import_names - gs.data_vaddr);
 
 		for (uint32_t i = 0; i < header_in_file->import_count; i++)
 		{
@@ -236,42 +235,79 @@ static int load_and_run_guest(const char *path)
 	}
 	if (missing_imports)
 	{
-		svcControlCodeMemory(code_handle, CodeMapOperation_UnmapOwner, owner_view, mapped_size, 0);
-		svcCloseHandle(code_handle);
-		free(owner_src);
-		free(file_data);
+		teardown(&gs);
 		return -1;
 	}
 
-	armDCacheFlush(owner_view, mapped_size);
+	rc = svcMapMemory((void *)(uintptr_t)gs.data_vaddr, gs.data_heap, gs.data_size);
+	if (R_FAILED(rc))
+	{
+		logf_both("svcMapMemory (data) FAILED, rc=0x%x\n", rc);
+		teardown(&gs);
+		return -1;
+	}
+	gs.data_view = gs.data_heap; /* now also true at gs.data_vaddr; only used as a "moved" flag */
 
-	rc = svcControlCodeMemory(code_handle, CodeMapOperation_MapSlave, (void *)(uintptr_t)GUEST_IMAGE_BASE,
-		mapped_size, Perm_Rx);
+	/* ---------- the exec segment: the CodeMemory dance */
+
+	gs.code_owner_src = aligned_alloc(0x1000, gs.code_size);
+	if (!gs.code_owner_src)
+	{
+		logf_both("aligned_alloc(0x%x) for the exec segment failed\n", gs.code_size);
+		teardown(&gs);
+		return -1;
+	}
+
+	rc = svcCreateCodeMemory(&gs.code_handle, gs.code_owner_src, gs.code_size);
+	if (R_FAILED(rc))
+	{
+		logf_both("svcCreateCodeMemory FAILED, rc=0x%x\n", rc);
+		teardown(&gs);
+		return -1;
+	}
+	gs.code_handle_valid = 1;
+
+	virtmemLock();
+	gs.code_owner_view = virtmemFindCodeMemory(gs.code_size, 0x1000);
+	virtmemUnlock();
+	if (!gs.code_owner_view)
+	{
+		logf_both("virtmemFindCodeMemory failed\n");
+		teardown(&gs);
+		return -1;
+	}
+
+	rc = svcControlCodeMemory(gs.code_handle, CodeMapOperation_MapOwner, gs.code_owner_view, gs.code_size, Perm_Rw);
+	if (R_FAILED(rc))
+	{
+		logf_both("MapOwner FAILED, rc=0x%x\n", rc);
+		teardown(&gs);
+		return -1;
+	}
+
+	memset(gs.code_owner_view, 0, gs.code_size);
+	memcpy(gs.code_owner_view, gs.file_data + exec_segment->p_offset, exec_segment->p_filesz);
+	armDCacheFlush(gs.code_owner_view, gs.code_size);
+
+	rc = svcControlCodeMemory(gs.code_handle, CodeMapOperation_MapSlave, (void *)(uintptr_t)gs.code_vaddr,
+		gs.code_size, Perm_Rx);
 	if (R_FAILED(rc))
 	{
 		logf_both("MapSlave FAILED, rc=0x%x\n", rc);
-		svcControlCodeMemory(code_handle, CodeMapOperation_UnmapOwner, owner_view, mapped_size, 0);
-		svcCloseHandle(code_handle);
-		free(owner_src);
-		free(file_data);
+		teardown(&gs);
 		return -1;
 	}
-	armICacheInvalidate((void *)(uintptr_t)GUEST_IMAGE_BASE, mapped_size);
+	armICacheInvalidate((void *)(uintptr_t)gs.code_vaddr, gs.code_size);
 
-	logf_both("mapped at 0x%x, R-X. about to call entry 0x%x ...\n",
-		GUEST_IMAGE_BASE, header_in_file->entry);
+	logf_both("mapped: code 0x%x (R-X), data 0x%x (RW-). about to call entry 0x%x ...\n",
+		gs.code_vaddr, gs.data_vaddr, header_in_file->entry);
 	{
 		void (*entry)(void) = (void (*)(void))(uintptr_t)header_in_file->entry;
 		entry();
 	}
 	logf_both("entry returned.\n");
 
-	svcControlCodeMemory(code_handle, CodeMapOperation_UnmapSlave, (void *)(uintptr_t)GUEST_IMAGE_BASE,
-		mapped_size, 0);
-	svcControlCodeMemory(code_handle, CodeMapOperation_UnmapOwner, owner_view, mapped_size, 0);
-	svcCloseHandle(code_handle);
-	free(owner_src);
-	free(file_data);
+	teardown(&gs);
 	return 0;
 }
 
