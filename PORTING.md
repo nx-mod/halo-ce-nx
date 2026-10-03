@@ -140,14 +140,56 @@ exclude these too, not just us): `dirent/*`, `poll`/`ppoll`, `statvfs`,
 is later; cancellation points had an unrelated type-conflict bug not
 yet investigated).
 
-**Links clean**: a test program using `snprintf` (mixed format
-specifiers), `malloc`/`free`, `strcpy` resolves every symbol against
-the built `libc.a` - verified locally (`readelf`: ELF32 EXEC), not yet
-run on hardware. That's the next concrete task: a milestone-2 guest
-exercising this for real, which also needs a writable data segment
-(plain `svcMapMemory`, not the CodeMemory dance) for musl's actual
-`.data`/`.bss` and a working `__guest_syscall` (even a minimal one -
-`brk`/`mmap` for malloc's growth path is the immediate need).
+### Milestone 2 - done: musl actually running, on hardware
+
+`port/switch/milestone-2.log`: real `printf` (through buffered stdio,
+`write()`, `__guest_syscall`, a new `host_write` import to real
+stdout/stderr), `malloc`/`snprintf`/`strlen`/`free`, and a loop of 4 KiB
+malloc/memset/free - all clean on real hardware. The guest now has a
+genuine two-segment layout (`guest.ld`, explicit `PHDRS`): R-X code via
+the CodeMemory dance, RW data+32 MiB heap via plain `svcMapMemory`.
+`guest_syscall.c`'s `__guest_syscall` dispatcher: `mmap` as a bump
+allocator over that heap, `write`/`writev` to `host_write`, `brk`/
+`munmap` as no-ops, `exit` halts.
+
+Three real bugs found and fixed getting here, each worth knowing about
+for whatever comes next:
+
+- **Linker script bug**: the heap reservation wasn't inside an output
+  section, so it never counted toward the segment's `memsz` - the host
+  would have allocated far too little and the heap symbols would have
+  pointed past the real mapped region. Fixed with an explicit `.heap
+  (NOLOAD)` section (counted in `memsz`, not `filesz` - same treatment
+  `.bss` gets automatically, just needs saying explicitly for a custom
+  section).
+- **`libc.auxv` is NULL**: no real ELF loader ever ran for this guest,
+  so musl's global `libc` struct starts zeroed. mallocng's (then
+  oldmalloc's `calloc`'s hook, same shape of issue) `get_random_secret()`
+  scans `libc.auxv` for `AT_RANDOM` with no NULL check - crashed inside
+  the allocator on the very first `malloc()`. Fixed: `guest_runtime_init.c`
+  sets a static empty `auxv` and a real `page_size` before anything else
+  runs.
+- **mallocng → oldmalloc**: mallocng's `get_meta()` asserts a "secret"
+  value stored at allocation time still matches at `free()` time (a
+  hardening check) - crashed (`Undefined Instruction`/`BRK`) on the very
+  first `free()`. Not root-caused; switched to musl's simpler classic
+  allocator instead, which has no such cross-call invariant and is a
+  better fit for this minimal a runtime regardless. Both fall back to
+  `mmap()` the same way (`__expand_heap` tries `SYS_brk` first, our stub
+  always fails that check, falls through to `mmap()` cleanly either way).
+
+### Next: milestone 3
+
+The guest/host plumbing and its libc are both proven now. Next is
+compiling a real slice of `source/` (the actual decompiled game, not a
+hand-written test) with this toolchain - the first time any of the
+462K lines meets `-mabi=ilp32`. Expect real friction: the MSVC-ABI
+compile flags the native ports use (`-fms-extensions`, `-malign-double`,
+`gnu89`, the `wchar_t`/struct-layout assumptions) haven't been tried
+together with `-mabi=ilp32` yet, and the game's own headers almost
+certainly want libc functions not yet in the curated musl list above.
+Start small - one self-contained file (something in `source/math` or
+`source/cseries`, minimal dependencies) - before the whole tree.
 
 ## Unexplored
 
