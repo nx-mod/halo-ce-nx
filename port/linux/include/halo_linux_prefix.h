@@ -62,6 +62,11 @@ token, leaving a following "(4)" alone to reach __declspec_align. */
 #define __declspec(x) __declspec_##x
 #define __declspec_align(n) __attribute__((aligned(n)))
 #define __declspec_selectany __attribute__((__weak__))
+#define __declspec_noreturn __attribute__((__noreturn__))
+/* DLL import/export linkage - meaningless on ELF, there's only one
+kind of symbol visibility that matters here */
+#define __declspec_dllexport
+#define __declspec_dllimport
 /* no AArch64 equivalent (x86 prologue/epilogue control) - every use
 is inside an __asm block, which doesn't exist on this target either */
 #define __declspec_naked
