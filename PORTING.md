@@ -191,6 +191,17 @@ certainly want libc functions not yet in the curated musl list above.
 Start small - one self-contained file (something in `source/math` or
 `source/cseries`, minimal dependencies) - before the whole tree.
 
+### Not splitting into its own repo (yet)
+
+`port/switch/guest/libc` and the loader mechanism (`switch_guest_abi.h`,
+the ELF-load/segment-placement code in `host_main.c`) are genuinely
+Halo-agnostic - nothing Halo-specific has leaked into either. Matches
+this account's `libdol-nx`/`libgc-nx`/`libwii-nx` pattern in spirit,
+but deliberately not split out yet: those were split *after* they had
+multiple real game consumers, not pre-emptively, and this design is
+still actively churning (mallocng→oldmalloc and three real bugs, this
+session alone). Revisit once a second project actually needs it.
+
 ## Unexplored
 
 - Whether Switch homebrew has an `mprotect`-equivalent for the desktop
