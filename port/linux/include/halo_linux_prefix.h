@@ -10,14 +10,19 @@ byte-for-byte identical to what the matching MSVC build compiles.
 #ifndef __HALO_LINUX_PREFIX_H
 #define __HALO_LINUX_PREFIX_H
 
-#if !defined(__i386__) && !defined(HALO_ANDROID) && !(defined(__arm__) && __SIZEOF_POINTER__ == 4)
+#if !defined(__i386__) && !defined(HALO_ANDROID) && !defined(HALO_SWITCH) && \
+	!(defined(__arm__) && __SIZEOF_POINTER__ == 4)
 #error the Linux port targets 32-bit x86 or 32-bit ARM: game data structures assume 32-bit pointers
+#endif
+#if defined(HALO_SWITCH) && __SIZEOF_POINTER__ != 4
+#error HALO_SWITCH needs -mabi=ilp32 (see port/switch/PORTING.md) - this game's data structures assume 32-bit pointers
 #endif
 
 #define HALO_LINUX 1
-/* the handheld ports (Android, Vita): no desktop updater, disc image import,
-invite hand-off or environment; settings live with the game data */
-#if defined(HALO_ANDROID) || defined(HALO_VITA)
+/* the handheld ports (Android, Vita, Switch): no desktop updater, disc
+image import, invite hand-off or environment; settings live with the
+game data */
+#if defined(HALO_ANDROID) || defined(HALO_VITA) || defined(HALO_SWITCH)
 #define HALO_NOT_DESKTOP 1
 #endif
 
@@ -28,6 +33,39 @@ invite hand-off or environment; settings live with the game data */
 #define _STDCALL_SUPPORTED 1
 #define _INTEGRAL_MAX_BITS 64
 #define _WCHAR_T_DEFINED
+
+#if defined(HALO_SWITCH)
+/* clang recognizes __stdcall/__cdecl/__fastcall as real (no-op outside
+x86) MSVC-compat keywords on every target, which is why Vita (also
+ARM, also clang) never needed this - GCC only understands them
+natively on x86, so AArch64 sees "__stdcall" as a bare, meaningless
+identifier and chokes on the resulting "HRESULT __stdcall name(...)"
+as two consecutive identifiers. There is only one calling convention
+on AArch64 anyway. */
+#define __stdcall
+#define __cdecl
+#define __fastcall
+
+/* same story as __stdcall above: clang recognizes MSVC's __intN
+type keywords on every target, GCC doesn't recognize them at all. */
+#define __int64 long long
+#define __int32 int
+#define __int16 short
+#define __int8 char
+
+/* GCC's -fms-extensions understands __declspec(...) exists but not
+any particular argument - "unknown type name 'align'" - clang
+apparently has built-in knowledge of the handful of declspec
+attributes this source actually uses. The usual portable trick:
+## only pastes "__declspec_" onto align/naked/selectany's own first
+token, leaving a following "(4)" alone to reach __declspec_align. */
+#define __declspec(x) __declspec_##x
+#define __declspec_align(n) __attribute__((aligned(n)))
+#define __declspec_selectany __attribute__((__weak__))
+/* no AArch64 equivalent (x86 prologue/epilogue control) - every use
+is inside an __asm block, which doesn't exist on this target either */
+#define __declspec_naked
+#endif
 #define _USE_MATH_DEFINES
 /* the XDK's COM headers decorate methods with __export when _WIN32 is unset */
 #define __export
@@ -38,13 +76,42 @@ MSVC gives C `__inline` functions COMDAT (pick-any) linkage. ELF C has no
 equivalent, so every translation unit gets its own private copy instead.
 Clang only warns about the resulting `static static`. */
 
+#if defined(HALO_SWITCH)
+/* GCC (devkitA64; every other platform here uses clang) hard-errors on
+`#pragma weak NAME` for a NAME that already has internal (static)
+linkage ("weak declaration of NAME must be public") - not a warning,
+unconditional, regardless of pragma placement (verified). The
+generated halo_msvc_semantics.h's `#pragma weak` list is exactly that
+situation for every such name, so the Switch build skips including
+its COMDAT section (tools/switch_msvc_semantics.py, if/when this
+becomes a real build step) and instead puts the weak attribute
+directly on the declaration, which GCC only warns about
+(-Wattributes, silenced by -w) - verified too. */
+/* No forced `static` here (unlike the other platforms' plain
+"static __inline__"): plenty of the source already writes
+`static __inline` itself (it's genuinely both, in MSVC terms), which
+would double up into "static static" - a GCC hard error, not just a
+clang warning like the other static-static case above. __weak__
+alone already gives every TU's copy pick-any (COMDAT-equivalent)
+linkage, whether or not the source's own "static" is present too:
+weak + the source's own static compiles fine (just a warning, also
+GCC-only, silenced by -w) - verified. __weak__/__always_inline__, not
+weak/always_inline: musl's own #define weak __attribute__((__weak__))
+(src/include/features.h) would otherwise expand the bare word again
+inside this attribute list. */
+#define __inline __inline__ __attribute__((__weak__))
+#define _inline __inline__ __attribute__((__weak__))
+#define __forceinline __inline__ __attribute__((__weak__, __always_inline__))
+#else
 #define __inline static __inline__
 #define _inline static __inline__
 #define __forceinline static __inline__ __attribute__((always_inline))
+#endif
 
 /* An inline function that also has an ordinary prototype keeps external
 linkage; the generated halo_msvc_semantics.h marks every inline function
-name `#pragma weak`, making those definitions pick-any like a COMDAT. */
+name `#pragma weak` (HALO_SWITCH: the attribute above instead), making
+those definitions pick-any like a COMDAT. */
 
 /* glibc spells its own extern-inline helpers with __inline; keep it from
 emitting them so the redefinition above cannot reach them. */
@@ -52,7 +119,11 @@ emitting them so the redefinition above cannot reach them. */
 
 /* ---------- __declspec(selectany) data (XDK D3DCONST tables) */
 
-#define DECLSPEC_SELECTANY __attribute__((weak))
+/* __weak__, not weak: musl's own #define weak __attribute__((__weak__))
+(src/include/features.h, only relevant for HALO_SWITCH's musl libc)
+would otherwise expand the bare word again inside this attribute
+list - same issue as __inline's below, fixed the same way. */
+#define DECLSPEC_SELECTANY __attribute__((__weak__))
 
 /* ---------- MSVC intrinsics
 

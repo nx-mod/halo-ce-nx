@@ -9,7 +9,15 @@ strnlen() cannot collide with the game's own), which hides glibc's M_*.
 #ifndef __HALO_LINUX_MATH_H
 #define __HALO_LINUX_MATH_H
 
+/* halo_linux_prefix.h's __inline -> "static __inline__" (MSVC comdat
+emulation) collides with the real math.h's own "static __inline"
+declarations as "static static" - a warning under clang, a hard error
+under GCC (this port's Switch build). Harmless to do unconditionally:
+__inline is restored right after, for the game's own headers. */
+#pragma push_macro("__inline")
+#undef __inline
 #include_next <math.h>
+#pragma pop_macro("__inline")
 
 #ifndef M_PI
 #define M_E 2.71828182845904523536

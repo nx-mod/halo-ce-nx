@@ -59,10 +59,14 @@ symbols in this file:
 
 /* ---------- macros */
 
+/* ui64 (MSVC's suffix spelling for the same unsigned 64-bit literal
+GCC spells ULL - same type, same value, no behavior difference) isn't
+a suffix GCC understands at all, under any flag - the Switch build
+needs the portable spelling here. */
 #define SWAP8(q) \
 	(((q)>>56) | (((q)>>40)&0xff00) | (((q)>>24)&0xff0000) | (((q)>>8)&0xff000000) | \
-	 (((q)<<8)&0xff00000000ui64) | (((q)<<24)&0xff0000000000ui64) | \
-	 (((q)<<40)&0xff000000000000ui64) | ((q)<<56))
+	 (((q)<<8)&0xff00000000ULL) | (((q)<<24)&0xff0000000000ULL) | \
+	 (((q)<<40)&0xff000000000000ULL) | ((q)<<56))
 
 /* ---------- structures */
 

@@ -33,6 +33,31 @@ if [ ! -d "$MUSL" ]; then
 	curl -sSfL -o "third_party/musl-$MUSL_VERSION.tar.gz" "$MUSL_URL"
 	tar xzf "third_party/musl-$MUSL_VERSION.tar.gz" -C third_party
 	rm "third_party/musl-$MUSL_VERSION.tar.gz"
+
+	# game code compiles with -D__STRICT_ANSI__ (deliberately: hides POSIX
+	# names like random()/strnlen() so they can't collide with the game's
+	# own - see port/linux/include/math.h's comment). musl's *internal*
+	# headers (never visible to game code - every declared name starts
+	# with __, or is "hidden") still need clockid_t/locale_t/etc., which
+	# musl's public headers only typedef when _GNU_SOURCE or similar is
+	# defined (include/time.h, include/pthread.h). Can't just define
+	# _GNU_SOURCE for every game file - that unlocks the exact POSIX
+	# declarations __STRICT_ANSI__ exists to hide. Scoped instead: define
+	# it only around these two internal headers' own single #include
+	# line, undefined again immediately after, so it never reaches any
+	# later #include in the same translation unit.
+	for f in src/include/time.h src/include/pthread.h; do
+		python3 -c '
+import re, sys
+path = sys.argv[1]
+text = open(path).read()
+text = re.sub(
+    r"^(#include \"\.\./\.\./include/.*\.h\")$",
+    "#define _GNU_SOURCE 1\n\\1\n#undef _GNU_SOURCE",
+    text, count=1, flags=re.MULTILINE)
+open(path, "w").write(text)
+' "$MUSL/$f"
+	done
 fi
 
 mkdir -p obj/include/bits "$OBJDIR"

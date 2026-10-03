@@ -178,18 +178,130 @@ for whatever comes next:
   `mmap()` the same way (`__expand_heap` tries `SYS_brk` first, our stub
   always fails that check, falls through to `mmap()` cleanly either way).
 
-### Next: milestone 3
+### Milestone 3 - done: real game source compiles, 83/85 on a representative sample
 
-The guest/host plumbing and its libc are both proven now. Next is
-compiling a real slice of `source/` (the actual decompiled game, not a
-hand-written test) with this toolchain - the first time any of the
-462K lines meets `-mabi=ilp32`. Expect real friction: the MSVC-ABI
-compile flags the native ports use (`-fms-extensions`, `-malign-double`,
-`gnu89`, the `wchar_t`/struct-layout assumptions) haven't been tried
-together with `-mabi=ilp32` yet, and the game's own headers almost
-certainly want libc functions not yet in the curated musl list above.
-Start small - one self-contained file (something in `source/math` or
-`source/cseries`, minimal dependencies) - before the whole tree.
+Compiled `source/math`, `source/cseries`, `source/memory`, `source/ai`
+(85 files - a deliberately mixed sample: math, core utilities, caching,
+AI) against the Switch ILP32 toolchain for the first time. Flags
+modeled on `tools/vita_build.py`'s `VITA_ABI_FLAGS` (the closest
+precedent - 32-bit ARM, same MSVC-ABI concerns), not `linux_build.py`'s
+(x86-specific: `-malign-double`, `-freg-struct-return` don't exist on
+ARM and aren't needed - AArch64's natural alignment already matches
+what those flags force on x86). `-DHALO_RELOCATABLE_TAG_CACHE=1`
+carried over from Vita too - same reasoning applies identically here.
+
+Every fix below is in `halo_linux_prefix.h`, gated behind `HALO_SWITCH`
+unless noted, because **every other platform here uses clang, which is
+lenient about several things GCC (devkitA64; the only GCC target in
+this whole project) treats as hard errors.** The pattern repeats
+enough to name: clang has broad MSVC-compatibility built in across
+every target it supports; GCC's `-fms-extensions` covers much less of
+it, and only natively on x86 for the calling-convention/type-keyword
+parts.
+
+- **`static` + `#pragma weak`**: GCC hard-errors "weak declaration of X
+  must be public" when a `#pragma weak` target already has internal
+  (`static`) linkage - unconditionally, regardless of pragma order
+  (verified with isolated repros). The generated `halo_msvc_semantics.h`
+  (`tools/linux_msvc_semantics.py`)'s whole "COMDAT inline functions"
+  section is exactly this situation, for every such name. Clang only
+  warns. Fix, found empirically: `__attribute__((weak))` **directly on
+  the declaration** is only a warning under GCC too (`-Wattributes`,
+  silenced by `-w`) - the bare pragma specifically is what's rejected,
+  not the underlying weak-ness. So for `HALO_SWITCH`: skip the
+  generated pragma section (`build/switch/halo_msvc_semantics_switch.h`
+  - pragma lines stripped; not yet wired into the real build, done by
+  hand for this test batch) and put `__attribute__((__weak__))`
+  **and drop the forced `static`** directly into the `__inline`/
+  `_inline`/`__forceinline` macros instead. Dropping `static` entirely
+  (rather than keeping it alongside the attribute) matters: plenty of
+  the source already writes `static __inline` itself (genuinely both,
+  in MSVC terms), which would double up into "static static" - a
+  *different* GCC hard error, covered next.
+- **`static` + `static` ("static static")**: `#define __inline
+  static __inline__` (every platform but Switch) doubles up wherever
+  source already writes `static __inline`/`static __forceinline`
+  itself (18 files in this sample alone - likely far more in the full
+  tree). Clang only warns ("Clang only warns about the resulting
+  `static static`" - the header's own pre-existing comment,
+  written for exactly this). GCC hard-errors. Fixed by the same
+  `static`-dropping change above: `__weak__` alone already gives every
+  TU's copy pick-any (COMDAT-equivalent) linkage, whether or not the
+  source's own `static` is present too - and `static` + `__attribute__
+  ((weak))` together compiles fine (GCC-only warning, silenced).
+- **Inverse case**: a handful of functions are forward-declared
+  *without* `static` and defined *with* it (e.g.
+  `ai_debug_drawstack_setup`) - genuinely inconsistent in the source
+  itself (clang tolerates it; GCC doesn't: "static declaration follows
+  non-static declaration"). Patched the one found in this sample
+  directly (added the missing `static` to the declaration, matching
+  the definition's "private code" section intent) rather than touching
+  the macro again - this direction isn't fixable generically the way
+  the other two were, but is rare.
+- **`weak` the bare word**: `halo_linux_prefix.h`'s own
+  `DECLSPEC_SELECTANY` used bare `__attribute__((weak))`, which musl's
+  `#define weak __attribute__((__weak__))` (`src/include/features.h`)
+  then expands *again* inside itself once its guest libc is in the
+  include path. Fixed by using the reserved `__weak__`/`__always_inline__`
+  spellings throughout (not `HALO_SWITCH`-gated - strictly safer for
+  every platform, since musl isn't in their include path and the
+  double-underscore spelling means exactly the same thing either way).
+- **`__stdcall`/`__cdecl`/`__fastcall`, `__int64`/`__int32`/`__int16`/
+  `__int8`, `__declspec(align(N)|selectany|naked)`**: all real,
+  MSVC-compatibility keywords clang recognizes on every target
+  (no-op on non-x86 for the calling-convention ones - there's only one
+  calling convention on AArch64 anyway); GCC doesn't know any of them
+  outside x86, not even with `-fms-extensions`. Defined directly
+  (`__declspec` via the standard `##`-pastes-onto-the-first-token-only
+  trick, since the preprocessor can't otherwise distinguish
+  `align(4)` from `selectany` as one macro parameter).
+- **`restrict`**: C99 keyword, not reserved under this project's
+  `-std=gnu89` (deliberate, project-wide, unrelated to Switch) - so
+  musl's own headers (written assuming a C99+ compiler) using bare
+  `restrict` as a type qualifier collide with it being just an ordinary
+  (and in a couple of spots, reused-with-different-types) identifier.
+  `-Drestrict=__restrict__` on the compile command - GCC's own
+  `__restrict__` is a keyword unconditionally, regardless of `-std`.
+- **`clockid_t`/`locale_t` unknown**: musl's *public* headers only
+  `#define __NEED_clockid_t` etc. when `_GNU_SOURCE`/`_POSIX_C_SOURCE`/
+  etc. is defined - none of which this project defines, on purpose
+  (`-D__STRICT_ANSI__` exists specifically to hide POSIX names like
+  `random()`/`strnlen()` from colliding with the game's own, across
+  every platform, not just Switch). But musl's own *internal* headers
+  (`src/include/time.h`, `src/include/pthread.h`) need these types for
+  their own `hidden`-linkage declarations, which are never visible to
+  game code anyway (name-mangled, can't collide with anything). Can't
+  just define `_GNU_SOURCE` for every game file - that would undo the
+  exact protection `__STRICT_ANSI__` provides. Fixed with a narrow,
+  reproducible patch in `build_musl.sh` (not a one-off hand-edit to the
+  gitignored, re-fetched vendored source): wrap only these two
+  internal headers' own single `#include` line in a
+  `#define _GNU_SOURCE 1` / `#undef _GNU_SOURCE` pair, scoped so it
+  never reaches any later `#include` in the same translation unit.
+- **MSVC integer suffixes** (`0xff00000000ui64`, `byte_swapping.c`):
+  GCC doesn't support the suffix spelling under any flag. Patched the
+  one file directly (`ULL`, same type and value, zero behavior change
+  - this is purely a spelling choice, not a decompilation-fidelity
+  concern).
+
+**Remaining, not yet fixed**: 2 files (`source/memory/lra_cache.c`,
+`lruv_cache.c`) hit a real but narrow pre-existing issue: the game's
+own `#define memcmp csmemcmp` family (cseries.h) redirects musl's
+`string.h` declarations too once both are in scope, and musl's
+`size_t`-based signature doesn't literally match `csmemcmp`'s own
+`unsigned long`-based one - same width under ILP32 (both 4 bytes), but
+GCC treats `long` and `int` as distinct types for strict prototype
+matching regardless. Only 2/85 files in this sample hit the specific
+include order that surfaces it. Not yet root-caused further.
+
+Not yet done: wiring any of this into the real `configure.py`/ninja
+build (`tools/switch_build.py` doesn't exist yet - this was all run
+by hand, mirroring `tools/vita_build.py`'s flags, to get a fast,
+cheap signal before investing in that); testing against the *whole*
+`source/` tree (this was a representative sample, not everything);
+`halo_msvc_semantics_switch.h` is a manually-stripped copy, not yet a
+real generator mode (`tools/linux_msvc_semantics.py --help` would need
+a new flag, or a small switch-specific post-process step).
 
 ### Not splitting into its own repo (yet)
 

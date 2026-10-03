@@ -151,7 +151,12 @@ typedef char ai_debug_actor_iterator_size_assert[
 
 /* ---------- prototypes */
 
-void ai_debug_drawstack_setup(
+/* static, matching the definition in "---------- private code" below
+and the __inline macro's expectations under HALO_SWITCH (GCC, unlike
+clang, hard-errors on a static definition following a non-static
+forward declaration of the same name) - this prototype was missing
+it, inconsistent with its own file-private intent. */
+static void ai_debug_drawstack_setup(
 	union real_point3d const *drawstack_base);
 static real_point3d *ai_debug_drawstack(
 	void);
