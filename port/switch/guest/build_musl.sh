@@ -44,7 +44,15 @@ CFLAGS="-mabi=ilp32 -O2 -nostdinc -fno-builtin -ffreestanding -fno-stack-protect
 	-Iobj/include -I$ARCH -Ilibc/src_include -I$MUSL/src/internal -I$MUSL/src/include -I$MUSL/include \
 	-D__linux__=1 -D__unix__=1"
 
-DIRS="conf ctype dirent env errno exit fcntl internal locale malloc malloc/mallocng math mman multibyte prng sched select signal stat stdio stdlib string time unistd"
+# oldmalloc, not mallocng: mallocng's get_meta() asserts a "secret"
+# value stored at allocation time still matches at free() time (a
+# hardening check), which crashed on real hardware (Undefined
+# Instruction / BRK) on the very first free() - not yet root-caused,
+# and a simpler allocator better suited to this minimal a runtime
+# anyway. Both fall back to mmap() (guest_syscall.c's bump allocator)
+# the same way; __expand_heap tries SYS_brk first but our stub always
+# fails that check, so it falls through to mmap() cleanly either way.
+DIRS="conf ctype dirent env errno exit fcntl internal locale malloc malloc/oldmalloc math mman multibyte prng sched select signal stat stdio stdlib string time unistd"
 
 EXCLUDE="dirent/alphasort.c dirent/closedir.c dirent/dirfd.c dirent/fdopendir.c dirent/opendir.c
 dirent/readdir.c dirent/readdir_r.c dirent/rewinddir.c dirent/scandir.c dirent/seekdir.c
@@ -53,7 +61,7 @@ internal/vdso.c internal/version.c select/poll.c select/ppoll.c stat/statvfs.c
 stdio/__fdopen.c stdio/fopencookie.c stdio/freopen.c stdio/pclose.c stdio/__stdio_seek.c
 stdio/__stdout_write.c time/__tz.c unistd/faccessat.c unistd/isatty.c unistd/nice.c
 unistd/tcgetpgrp.c unistd/tcsetpgrp.c conf/sysconf.c
-env/__init_tls.c env/__stack_chk.c env/__reset_tls.c malloc/oldmalloc thread/pthread_create.c
+env/__init_tls.c env/__stack_chk.c env/__reset_tls.c malloc/mallocng thread/pthread_create.c
 string/explicit_bzero.c"
 
 objects=""
