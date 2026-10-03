@@ -30,8 +30,11 @@ __attribute__((section(".guest_header"), used)) const struct guest_header guest_
 	.entry = (uint32_t)(uintptr_t)__guest_entry,
 };
 
+extern void __guest_runtime_init(void);
+
 void __guest_entry(void)
 {
+	__guest_runtime_init();
 	host_log("guest entry reached; exercising musl now");
 
 	printf("printf works: %d + %d = %d\n", 2, 2, 2 + 2);
