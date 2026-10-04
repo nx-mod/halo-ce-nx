@@ -770,16 +770,61 @@ deliberately separate from `sdmc:/switch/halo-ce-nx-guest-poc/`'s own
 app binaries/log - different lifecycle (gigabytes, user-supplied,
 survives a reinstall) from a homebrew app's usual folder.
 
-**Not yet wired up despite all of this linking and deploying cleanly**:
-`guest_main.c`'s `__guest_entry` is *still* the Milestone 2 printf/
-malloc smoke test - it never calls `platform_video_initialize` or
-anything else in the real renderer, so nothing has actually drawn a
-pixel yet. Getting the full link/deploy loop itself exercised (icon,
-app title "Halo", the `import_count` hang found and fixed on real
-hardware) was this milestone's actual scope. Wiring the entry to the
-game's real bootstrap is the next, now fully-scoped step - at which
-point the Milestone 7 stubs are where to expect the first real
-rendering-side crashes.
+### Milestone 10 - done: real pixels on screen, on real hardware
+
+Added `guest_text_demo.c` - a standalone call from `guest_main.c`'s
+entry, after the Milestone 2 smoke test - that calls
+`platform_video_initialize`, compiles/links a real shader, builds a
+vertex buffer for "NX-MOD/HALOCE-NX" as a vector-stroke font (`GL_LINES`,
+each letter a handful of line segments - no bitmap/texture font
+pipeline needed, so no way to get an unreadable blurry glyph), and
+presents it for 3600 frames. **Confirmed visible on real hardware.**
+First real pixel this project has ever drawn - the whole chain actually
+works end to end: the generated guest/host GL import bridge, EGL
+context creation, real shader compile/link, vertex buffers, draw
+calls, through to the Tegra X1's GPU via nouveau's `nvc0` driver.
+
+Three more real, hardware-found bugs on the way there, each with the
+same shape: a GL/EGL call whose return value was never checked, so its
+silent failure looked identical to a genuine rendering bug from the
+symptom alone ("no text visible") - diagnosed in order by adding one
+more layer of logging each time, not by guessing:
+- **`eglSwapBuffers`'s return value was never checked** at all. A
+  silent failure there (`EGL_BAD_SURFACE`, the exact failure
+  `~/switch/nxvk`'s own smoke test watches for) would mean every
+  `glClear`/`glDrawArrays` keeps succeeding into the backbuffer while
+  nothing ever reaches the screen. Hardware showed it was *not*
+  failing - ruled out, not the bug, but worth checking permanently now
+  that it's checked.
+- **`eglQuerySurface`'s return value was never checked either** - and
+  this one *was* the bug, confirmed on hardware: it returns success
+  (`ok`) but a surface size of `0x0` immediately after
+  `eglCreateWindowSurface`. Not a code error - some real hardware
+  timing/settling quirk where the window's size isn't available
+  immediately after creation. `0x0` fed straight into
+  `glViewport(0,0,0,0)` (every draw clipped to a zero-area viewport,
+  no GL error) and a `height/width` aspect ratio of `0/0` = NaN (every
+  vertex's x becomes NaN, also no GL error) - either alone reproduces
+  "no text" exactly, with every other diagnostic staying clean, which
+  is exactly what hardware showed before this was found. Fixed with a
+  1280x720 fallback when the query reports a non-positive size; the
+  *real* fix (retry the query after a frame, or use the display's own
+  known resolution directly instead of asking the surface) is still
+  open - the fallback just needs to not propagate zero/NaN downstream,
+  which it now doesn't.
+- Along the way, also moved the vector font's aspect-ratio correction
+  from a GLSL uniform to plain CPU-side math when building the vertex
+  buffer - not the actual bug this time, but the same category of
+  fragile-if-unchecked state (an unset/`-1` uniform location would
+  have silently collapsed every vertex to `x=0`, a different route to
+  the identical symptom) and strictly simpler either way.
+
+Still not done: `guest_main.c`'s entry is *still* the Milestone 2/10
+smoke test chain, not the game's real bootstrap - wiring that up is
+the next, now fully-scoped step, at which point the Milestone 7 null
+stubs (D3D8 Creates claiming success with garbage pointers, all file
+I/O failing outright) are exactly where to expect the first real
+rendering-side crashes once actual game code starts calling into them.
 
 ## Unexplored
 
