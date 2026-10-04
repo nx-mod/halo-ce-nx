@@ -119,11 +119,17 @@ static int glyph_segments(char c, struct segment *out, int max)
 
 static const char kMessage[] = "NX-MOD/HALOCE-NX";
 
+/* aspect correction happens on the CPU when the vertex buffer is built
+(below), not through a uniform here - one less thing that can go wrong
+silently (an unset/-1 uniform location would leave gl_Position's scale
+at GLSL's default-zero-initialized value, collapsing every vertex to
+x=0 instead of just getting the aspect ratio wrong - very hard to
+diagnose by description alone, "no text" fits that failure exactly as
+well as it fits a real rendering bug). Plain passthrough instead. */
 static const char *kVertexSource =
 	"#version 300 es\n"
 	"layout(location = 0) in vec2 aPos;\n"
-	"uniform float uScaleX;\n"
-	"void main() { gl_Position = vec4(aPos.x * uScaleX, aPos.y, 0.0, 1.0); }\n";
+	"void main() { gl_Position = vec4(aPos, 0.0, 1.0); }\n";
 
 static const char *kFragmentSource =
 	"#version 300 es\n"
@@ -161,7 +167,7 @@ void guest_text_demo(void)
 	float total_width = advance * (float)(sizeof(kMessage) - 1);
 	float start_x = -total_width * 0.5f;
 	GLuint vertex_shader, fragment_shader, program, vao, vbo;
-	GLint scale_location;
+	float aspect_scale_x;
 	int i, frame;
 
 	host_log("guest_text_demo: starting");
@@ -177,6 +183,7 @@ void guest_text_demo(void)
 		host_log("guest_text_demo: some GL functions were unavailable (continuing anyway)");
 
 	/* build the line-segment vertex buffer for the whole message */
+	aspect_scale_x = (float)height / (float)width;
 	for (i = 0; kMessage[i]; i++)
 	{
 		struct segment segments[6];
@@ -186,9 +193,9 @@ void guest_text_demo(void)
 
 		for (s = 0; s < count; s++)
 		{
-			vertices[vertex_count++] = origin_x + segments[s].x0 * glyph_width;
+			vertices[vertex_count++] = (origin_x + segments[s].x0 * glyph_width) * aspect_scale_x;
 			vertices[vertex_count++] = -0.5f * glyph_height + segments[s].y0 * glyph_height;
-			vertices[vertex_count++] = origin_x + segments[s].x1 * glyph_width;
+			vertices[vertex_count++] = (origin_x + segments[s].x1 * glyph_width) * aspect_scale_x;
 			vertices[vertex_count++] = -0.5f * glyph_height + segments[s].y1 * glyph_height;
 		}
 	}
@@ -229,12 +236,12 @@ void guest_text_demo(void)
 	halo_glEnableVertexAttribArray(0);
 
 	halo_glUseProgram(program);
-	scale_location = halo_glGetUniformLocation(program, "uScaleX");
-	halo_glUniform1f(scale_location, (float)height / (float)width);
+	halo_glDisable(GL_DEPTH_TEST);
+	halo_glDisable(GL_CULL_FACE);
 	halo_glLineWidth(3.0f);
 	halo_glViewport(0, 0, width, height);
+	host_log("guest_text_demo: GL setup done, drawing starts");
 
-	host_log("guest_text_demo: entering present loop");
 	for (frame = 0; frame < 3600; frame++)
 	{
 		platform_pump_events();
@@ -242,6 +249,20 @@ void guest_text_demo(void)
 		halo_glClear(GL_COLOR_BUFFER_BIT);
 		halo_glDrawArrays(GL_LINES, 0, vertex_count / 2);
 		platform_video_swap();
+		/* confirms the loop is actually iterating, not stuck on frame 0 -
+		and glGetError lands in the log if any of the above silently
+		failed (GLES3 reports errors on the next call, not the one that
+		caused them, so checking once per frame here is deliberate, not
+		just checking right after glDrawArrays) */
+		if (frame % 600 == 0)
+		{
+			char message[96];
+			unsigned int error = halo_glGetError();
+
+			__builtin_snprintf(message, sizeof(message),
+				"guest_text_demo: frame %d, vertex_count=%d, glGetError=0x%x", frame, vertex_count, error);
+			host_log(message);
+		}
 	}
 	host_log("guest_text_demo: done (3600 frames presented)");
 }

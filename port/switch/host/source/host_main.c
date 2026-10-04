@@ -26,7 +26,10 @@ needs to execute.
 
 static FILE *g_log;
 
-static void logf_both(const char *fmt, ...)
+/* not static - host_video.c logs eglSwapBuffers failures through this
+same path, so they land in host.log alongside everything else rather
+than wherever stderr alone goes */
+void logf_both(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);

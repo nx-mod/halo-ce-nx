@@ -94,10 +94,27 @@ void platform_video_drawable_size(int *width, int *height)
 		*height = h;
 }
 
+extern void logf_both(const char *fmt, ...);
+
 void platform_video_swap(void)
 {
-	if (s_display != EGL_NO_DISPLAY)
-		eglSwapBuffers(s_display, s_surface);
+	static int failure_count;
+
+	if (s_display == EGL_NO_DISPLAY)
+		return;
+	/* never checked before this - a silently failing swap (e.g.
+	EGL_BAD_SURFACE: "swapchain out of date", the exact failure
+	~/switch/nxvk's smoke test itself watches for) would mean every
+	glClear/glDrawArrays call keeps succeeding into the backbuffer while
+	nothing ever actually reaches the screen - indistinguishable from a
+	real rendering bug by description alone ("no text"), but a totally
+	different fix. Logged, not fatal: only the first few, so a
+	persistent failure doesn't spam host.log for the rest of the run. */
+	if (!eglSwapBuffers(s_display, s_surface) && failure_count < 5)
+	{
+		failure_count++;
+		logf_both("platform_video_swap: eglSwapBuffers failed, eglGetError=0x%x", eglGetError());
+	}
 }
 
 /* main thread only (the guest's own comment in sdl_platform.h) - this
