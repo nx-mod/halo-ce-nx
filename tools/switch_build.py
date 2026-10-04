@@ -6,11 +6,16 @@ unlike Android's guest) for the first time across the whole source
 tree, not just a sample. See port/switch/PORTING.md for the story and
 every fix below's reasoning.
 
-No link step yet: there's no Switch platform layer (port/switch/platform
-doesn't exist - that's the next milestone, a GLES3 D3D8 translation
-layer analogous to port/vita/platform/d3d8_gxm.c). This only proves the
-game itself compiles; linking needs real host_* imports for everything
-the platform layer currently provides for Linux/Vita.
+Also compiles the slice of port/linux/src (SWITCH_PLATFORM_FILES) and
+port/third_party/musl-math this guest can reuse as pure, portable
+compute - no host import needed. Still no ninja link rule: that step is
+done by hand against a manually-built guest_*.o runtime set for now (see
+PORTING.md's milestone 5/6 - formalize once there's a real
+port/switch/platform providing the rest, a GLES3 D3D8 translation layer
+analogous to port/vita/platform/d3d8_gxm.c). The remaining undefined
+symbols at that hand-linked stage are exactly D3D8/DirectSound/XInput/
+XNet/Win32 file-and-handle API/save-system - the real platform layer's
+job, not a bug.
 """
 
 import json
@@ -20,7 +25,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from .ninja_syntax import Writer
-from .linux_build import GAME_FLAGS, XDK_INCLUDE, xdk_headers, _quote
+from .linux_build import (
+    GAME_FLAGS, PLATFORM_FLAGS, XDK_INCLUDE, MUSL_MATH_DIR, xdk_headers, musl_math_sources, _quote,
+)
 
 LINUX_DIR = Path("port/linux")
 SWITCH_DIR = Path("port/switch")
@@ -70,6 +77,14 @@ SWITCH_GAME_FLAGS = [f for f in GAME_FLAGS if f != "-Wno-error=incompatible-func
     "-Drestrict=__restrict__",
 ]
 
+# The subset of port/linux/src this port's guest can reuse as-is: pure
+# compute/data, no real file/thread/GPU/audio access, so no host import
+# needed - just the same ILP32 ABI as game code. Everything else there
+# (xbox_kernel.c, xnet.c, dsound_sdl.c, xinput_sdl.c, d3d8_gl.c, ...) is
+# either SDL-tied (wrong for Switch - see PORTING.md's platform-layer
+# plan) or needs a real host_* import that doesn't exist yet.
+SWITCH_PLATFORM_FILES = ["halo_linker_common.c", "msvc_crt.c", "msvc_wide.c", "bink_null.c"]
+
 MUSL_VERSION = "1.2.5"
 MUSL = GUEST_DIR / "third_party" / f"musl-{MUSL_VERSION}"
 MUSL_ARCH = GUEST_DIR / "libc" / "arch" / "aarch64_ilp32"
@@ -88,6 +103,8 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
     config: Dict[str, Any] = json.loads(config_path.read_text(encoding="utf-8"))
     linux_semantics_header = Path("build/linux/halo_msvc_semantics.h")
     switch_semantics_header = BUILD / "halo_msvc_semantics_switch.h"
+    linux_platform_semantics_header = Path("build/linux/platform_msvc_semantics.h")
+    switch_platform_semantics_header = BUILD / "platform_msvc_semantics_switch.h"
     prefix_header = LINUX_DIR / "include" / "halo_linux_prefix.h"
     obj_dir = BUILD / "obj"
 
@@ -114,6 +131,8 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
         description="SWITCH MSVC SEMANTICS (no pragma weak) $out",
     )
     n.build(outputs=switch_semantics_header, rule="switch_strip_weak_pragmas", inputs=linux_semantics_header)
+    n.build(outputs=switch_platform_semantics_header, rule="switch_strip_weak_pragmas",
+            inputs=linux_platform_semantics_header)
 
     # musl: not yet real ninja rules (build_musl.sh does its own up-to-date
     # checking in bash) - good enough to unblock game compiles; formalize
@@ -190,6 +209,35 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
                 add(source, comdat_cflags, extra_implicit=comdat_implicit)
             else:
                 add(source, game_cflags)
+
+    # the reusable slice of port/linux/src (SWITCH_PLATFORM_FILES, see its
+    # comment) - not game code, so no gnu89/MSVC-inline concern: compiled
+    # gnu11 like Linux/Vita's own platform layer, and sees only the XDK's
+    # inline functions (platform files don't include game headers at all).
+    platform_implicit = [*xdk_headers(), prefix_header, switch_platform_semantics_header, MUSL_LIB]
+    platform_cflags = " ".join([
+        abi, " ".join(PLATFORM_FLAGS), f"-include {prefix_header}", f"-include {switch_platform_semantics_header}",
+        "-DDEBUG", "-Dxbox", f"-I{port_include}", f"-I{LINUX_DIR}/src", sdk_flags, musl_includes,
+    ])
+    for name in SWITCH_PLATFORM_FILES:
+        source = LINUX_DIR / "src" / name
+        obj = obj_dir / source.with_suffix(".o")
+        objects.append(obj)
+        n.build(outputs=obj, rule="switch_cc", inputs=source, implicit=platform_implicit,
+                variables={"cflags": platform_cflags})
+
+    # halo_math.h's deterministic, lockstep-safe halo_sin/halo_cos/... -
+    # musl's own math source, built the same way on every native port
+    # (see tools/linux_build.py's musl_math_sources). Pure computation,
+    # same gnu11/no-game-ABI treatment as the platform files above.
+    musl_math_cflags = " ".join([
+        abi, "-std=gnu11", "-w", f"-I{MUSL_MATH_DIR}/include", f"-include {MUSL_MATH_DIR}/include/libm.h",
+    ])
+    for source in musl_math_sources():
+        obj = obj_dir / "musl_math" / source.name.replace(".c", ".o")
+        objects.append(obj)
+        n.build(outputs=obj, rule="switch_cc", inputs=source, implicit=[MUSL_LIB],
+                variables={"cflags": musl_math_cflags})
 
     n.build(outputs="switch_guest", rule="phony", inputs=objects)
     n.newline()

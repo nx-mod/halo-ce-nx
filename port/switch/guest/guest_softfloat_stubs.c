@@ -38,8 +38,15 @@ typedef struct
 tf_bits __addtf3(tf_bits a, tf_bits b) { unexpected("__addtf3"); return a; }
 tf_bits __subtf3(tf_bits a, tf_bits b) { unexpected("__subtf3"); return a; }
 tf_bits __multf3(tf_bits a, tf_bits b) { unexpected("__multf3"); return a; }
+tf_bits __divtf3(tf_bits a, tf_bits b) { unexpected("__divtf3"); return a; }
 int __netf2(tf_bits a, tf_bits b) { unexpected("__netf2"); return 1; }
+int __eqtf2(tf_bits a, tf_bits b) { unexpected("__eqtf2"); return 1; }
+int __getf2(tf_bits a, tf_bits b) { unexpected("__getf2"); return -1; }
+int __letf2(tf_bits a, tf_bits b) { unexpected("__letf2"); return 1; }
 tf_bits __extenddftf2(double a) { unexpected("__extenddftf2"); return (tf_bits){0, 0}; }
+tf_bits __extendsftf2(float a) { unexpected("__extendsftf2"); return (tf_bits){0, 0}; }
+double __trunctfdf2(tf_bits a) { unexpected("__trunctfdf2"); return 0; }
+float __trunctfsf2(tf_bits a) { unexpected("__trunctfsf2"); return 0; }
 unsigned __fixunstfsi(tf_bits a) { unexpected("__fixunstfsi"); return 0; }
 tf_bits __floatunsitf(unsigned a) { unexpected("__floatunsitf"); return (tf_bits){0, 0}; }
 int __fixtfsi(tf_bits a) { unexpected("__fixtfsi"); return 0; }

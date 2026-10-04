@@ -411,6 +411,86 @@ change anything - `build.ninja` is generated output, checked into
 nothing; re-run `python3 configure.py` after any change there, the same
 as after touching `config/config.json`.
 
+### Milestone 6 - done: reused port/linux/src shrinks the link to just the real platform layer
+
+Milestone 5 left 540 unique undefined references - everything the real
+platform layer needs to provide. A chunk of those aren't actually
+platform-specific: `port/linux/src` already has pure-compute files with
+no file/thread/GPU/audio dependency, reusable by the guest exactly as
+written. Added to `tools/switch_build.py` (`SWITCH_PLATFORM_FILES`,
+compiled gnu11/`-DHALO_LINUX_PLATFORM_LAYER`, same recipe as
+`tools/linux_build.py`'s `PLATFORM_FLAGS` - these aren't game code, so
+none of the gnu89/MSVC-inline machinery applies):
+
+- `halo_linker_common.c` - the ~80 "tentative COMMON" globals
+  (`ai_globals`, every `debug_*`/`collision_debug_*` flag, ...) every
+  platform needs as a placeholder until their owning unit is
+  reconstructed. Weak data, no linkage concerns at all.
+- `msvc_crt.c`, `msvc_wide.c` - the MSVC CRT/wide-char shims
+  (`_stricmp`, `msvc_wcs*`, `halo_linux_fopen`, ...). Needed two real
+  fixes, not just flags: GCC has no `__builtin_arm_{r,w}sr64` (clang-only
+  AArch64 intrinsic, same category as `__builtin_arm_yield` in musl's
+  arch files) - replaced with portable `mrs`/`msr` inline asm, which
+  works under both compilers; and `_control87`/`_statusfp`/`_clearfp`
+  were guarded by `#ifdef HALO_ANDROID` for the portable ARM/C99-fenv
+  implementation (vs. the `#else` branch's glibc-specific, x87-shaped
+  `fenv_t.__control_word`) - added `HALO_SWITCH` to that condition,
+  since it's the same musl guest libc either way. Also found (and fixed
+  the same way) that `_ReadWriteBarrier` only existed under a third,
+  separate `#elif defined(__arm__)` branch - missing from the AArch64
+  one entirely, on every platform including Android; added it there too
+  (it's architecture-independent, just an asm memory clobber).
+- `bink_null.c` - Bink video's null backend (no real decoder on any
+  native port; `BinkOpen` reports "movie can't open" and the game skips
+  it, same as a missing file). Resolves every `Bink*`/`RADSetMemory`
+  symbol in one shot.
+- `port/third_party/musl-math` (`musl_math_sources()`, imported from
+  `tools/linux_build.py`) - `halo_sin`/`halo_cos`/... (`port/include/
+  halo_math.h`): every native port renames musl's math functions and
+  builds them from source rather than linking the host's, so system-link
+  games can't desync on the last bit of a libm that differs per platform.
+  Already fully portable musl C - no changes needed.
+
+Plus two new guest-runtime files (manually built like the existing
+`guest_*.o` set - see the "not a real ninja rule yet" note above),
+covering what's left that's self-contained (no new host import needed):
+
+- `guest_platform_stubs.c`: `platform_log`/`platform_show_message`
+  (format into a buffer, send through the existing `host_log` import),
+  `platform_translate_path` (identity passthrough - no real path scheme
+  needed until there's real file I/O to target), `config_boolean`/
+  `config_real`/`config_string` (`port_config.c`'s cvar system, not
+  ported - every setting reports its zero/off default), `vita_host_time_us`
+  (returns 0 - no host-synced clock import yet), `test_input_hold_action`
+  (`xinput_sdl.c`'s debug hook, unused - no-op).
+- `guest_pthread_stubs.c`: the guest is single-threaded by construction
+  (`guest_tp.c`'s one static TLS block), so mutex/condvar ops are
+  genuine no-ops (one thread can't contend with itself) and
+  `pthread_create` fails outright (`EAGAIN`) rather than faking
+  concurrency by running the start routine synchronously - a caller that
+  checks the return value loses a background task cleanly instead of
+  running reentrant code in the wrong place.
+- `guest_softfloat_stubs.c` gained the other half of the quad-float
+  trap set (`__divtf3`, `__eqtf2`/`__getf2`/`__letf2`,
+  `__extendsftf2`, `__trunctfdf2`/`__trunctfsf2`) - same
+  "trap if this ever actually fires" reasoning as the original set.
+
+Net: 540 -> 286 unique undefined references, still zero "multiple
+definition" errors. What's left is now a clean boundary - exactly
+D3D8, DirectSound, XInput/`XInitDevices`, XNet/`halo_ws_*`, the Win32
+file/handle/time API (`CreateFileA`, `ReadFile`, `QueryPerformanceCounter`,
+...), the save-game/signature API, and `posix_stat`/`posix_fstat`/
+`posix_make_directory`/`posix_truncate` (`port/linux/src/posix.h`'s own
+comment: Android compiles these straight into its 64-bit host and calls
+them from the ILP32 guest - the same shape Switch needs, with new
+host_* imports, once file I/O is real). Plus a handful of musl functions
+`build_musl.sh` still excludes for real reasons (`fdopen`/`freopen`/
+`__fdopen` need real `ioctl`/syscall-macro support that doesn't
+preprocess cleanly yet; `__secs_to_zone`/`__tm_to_tzname` are timezone
+database code; `__syscall_cp` is thread-cancellation plumbing with no
+second thread to cancel). None of this is a surprise - it's
+`port/switch/platform`'s actual job list for the next milestone.
+
 ### Not splitting into its own repo (yet)
 
 `port/switch/guest/libc` and the loader mechanism (`switch_guest_abi.h`,

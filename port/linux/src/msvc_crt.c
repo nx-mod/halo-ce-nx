@@ -295,10 +295,13 @@ static unsigned short msvc_to_control_word(unsigned int value, unsigned short wo
 	return word;
 }
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) || defined(HALO_SWITCH)
 /* AArch64: the rounding mode lives in FPCR.RMode, the sticky exception
 flags in FPSR. Precision control and exception unmasking have no
-equivalent; the rest of the MSVC control word is only remembered. */
+equivalent; the rest of the MSVC control word is only remembered.
+HALO_SWITCH: same musl guest libc as Android's, so the same portable
+C99-fenv branch applies - the #else branch assumes glibc's x87-shaped
+fenv_t (__control_word/__status_word), which doesn't exist here either. */
 static unsigned int msvc_control_word = CW_DEFAULT;
 
 unsigned int _control87(unsigned int new_value, unsigned int mask)
@@ -308,7 +311,10 @@ unsigned int _control87(unsigned int new_value, unsigned int mask)
 	if (mask)
 	{
 		msvc_control_word = (msvc_control_word & ~mask) | (new_value & mask);
-		fpcr = __builtin_arm_rsr64("fpcr");
+		/* portable asm instead of clang's __builtin_arm_{r,w}sr64 (GCC has
+		no equivalent builtin - same "clang-only AArch64 intrinsic" pattern
+		as everywhere else in this port) */
+		__asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr));
 		fpcr &= ~(3ULL << 22);
 		switch (msvc_control_word & _MCW_RC)
 		{
@@ -317,7 +323,7 @@ unsigned int _control87(unsigned int new_value, unsigned int mask)
 		case _RC_CHOP: fpcr |= 3ULL << 22; break;
 		default: break;
 		}
-		__builtin_arm_wsr64("fpcr", fpcr);
+		__asm__ __volatile__("msr fpcr, %0" :: "r"(fpcr));
 	}
 	return msvc_control_word;
 }
@@ -330,8 +336,10 @@ unsigned int _controlfp(unsigned int new_value, unsigned int mask)
 
 unsigned int _statusfp(void)
 {
-	unsigned long long fpsr = __builtin_arm_rsr64("fpsr");
+	unsigned long long fpsr;
 	unsigned int result = 0;
+
+	__asm__ __volatile__("mrs %0, fpsr" : "=r"(fpsr));
 
 	/* as the x87 status word's low bits: invalid, denormal, zero divide,
 	overflow, underflow, precision */
@@ -347,9 +355,20 @@ unsigned int _statusfp(void)
 unsigned int _clearfp(void)
 {
 	unsigned int status = _statusfp();
+	unsigned long long fpsr;
 
-	__builtin_arm_wsr64("fpsr", __builtin_arm_rsr64("fpsr") & ~0x9fULL);
+	__asm__ __volatile__("mrs %0, fpsr" : "=r"(fpsr));
+	fpsr &= ~0x9fULL;
+	__asm__ __volatile__("msr fpsr, %0" :: "r"(fpsr));
 	return status;
+}
+
+/* MSVC's compiler-only barrier; clang provides it as a builtin on x86 alone.
+An out-of-line call is already a barrier for the caller - same as the
+__arm__ branch below, just missing here until HALO_SWITCH needed it. */
+void _ReadWriteBarrier(void)
+{
+	__asm__ __volatile__("" ::: "memory");
 }
 #elif defined(__arm__)
 /* MSVC's compiler-only barrier; clang provides it as a builtin on x86 alone.
