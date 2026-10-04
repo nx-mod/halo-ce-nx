@@ -61,8 +61,9 @@ documenting as a real CFW requirement for players, not just a dev detail.
 4. `port/switch/` (modeled on `port/vita/`): devkitA64 + libnx, SDL2 for
    input/audio/window (mature Switch portlib; Vita's sceGxm/pad calls get
    replaced either way), GLES3 (`GLES3/gl3.h`, `libEGL.a`, `libGLESv2.a`,
-   Mesa/NVK via `libnvk`) for whatever `port/vita/platform`'s D3D8 shim
-   did via sceGxm.
+   Mesa's nouveau `nvc0` Gallium driver for the GM20B) for whatever
+   `port/vita/platform`'s D3D8 shim did via sceGxm. (Superseded by
+   Milestone 9: no SDL at all - libnx native `audout`/`hid` instead.)
 
 ### First concrete milestone - done
 
@@ -518,17 +519,21 @@ Decided, based on this account's `~/switch/dawn` and `~/switch/wiicompiled`
 projects (both proven on real hardware - see PORTING.md history if this
 section is ever stale, or ask):
 
-- **Rendering**: GLES3 via devkitPro's portlibs (`libnvk_gl`/`libEGL`/
-  `libGLESv2`), adapting `port/vita/platform/d3d8_gxm.c`'s sibling
-  `d3d8_gl.c` approach - not raw Vulkan/Dawn directly. `~/switch/dawn`
-  proved the underlying NVK Vulkan driver works on real hardware
+- **Rendering**: GLES3 via devkitPro's portlibs (`libEGL`/`libGLESv2`/
+  `libglapi`/`libdrm_nouveau`), adapting `port/vita/platform/d3d8_gxm.c`'s
+  sibling `d3d8_gl.c` approach - not raw Vulkan/Dawn directly.
+  `~/switch/dawn` proved raw Vulkan works on real hardware via NVK
   (`vkCreateViSurfaceNN`/swapchain/present, 180/180 frames, visually
   confirmed), but Dawn's own WebGPU surface abstraction has no Horizon
   VI-surface type yet (the smoke test bypassed Dawn for raw Vulkan
   specifically because of that gap), and translating D3D8's GL-shaped
   state machine straight to Vulkan's explicit pipeline/descriptor model
-  would mean rewriting `d3d8_gl.c` rather than adapting it. GLES3-over-
-  NVK gets the same validated driver at the right abstraction level.
+  would mean rewriting `d3d8_gl.c` rather than adapting it. GLES3 here
+  actually runs through a *different* Mesa driver than that Vulkan test
+  - nouveau's `nvc0` Gallium driver, not NVK (NVK is Vulkan-only) - but
+  the same underlying hardware/kernel path, and the right abstraction
+  level either way. Confirmed working end to end on hardware in
+  Milestone 9.
 - **Audio/input**: libnx's native `audout`/`hid` directly, not SDL2/SDL3.
   `~/switch/wiicompiled`'s own notes: "SDL3 has no Switch backend...
   audio→audout, input→hid" - an established, working choice in this
@@ -727,8 +732,8 @@ Real bugs found getting both sides to link, not just stubs:
   instead.
 - **The host NRO's `LIBS` needed `-lstdc++ -lm`** alongside
   `-lEGL -lGLESv2 -lglapi -ldrm_nouveau -lnx` (devkitPro's own
-  `es2gears` example has the exact line) - `libEGL.a`'s NVK/Mesa driver
-  internals are C++ (`nv50_ir`'s codegen), so even a plain-C project
+  `es2gears` example has the exact line) - `libEGL.a`'s nouveau `nvc0`/
+  Gallium driver internals are C++ (`nv50_ir`'s codegen), so even a plain-C project
   needs the C++ runtime for `operator new`/`delete` and friends; and
   Mesa's GLSL constant folder calls libm directly (`powf`, `sinf`, ...).
 - **A real, hardware-confirmed bug**, not caught until an actual

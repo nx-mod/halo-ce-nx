@@ -68,4 +68,7 @@ void __guest_entry(void)
 	}
 
 	host_log("guest entry done - musl held up");
+
+	extern void guest_text_demo(void);
+	guest_text_demo();
 }
