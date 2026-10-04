@@ -362,11 +362,25 @@ multi-GB disc image sitting in it). */
 #define GAME_DATA_DIR "sdmc:/haloce-nx"
 #define GAME_XISO_PATH GAME_DATA_DIR "/halo.xiso"
 
+/* a multi-GB xiso takes minutes to extract over the SD card, not
+seconds - with no on-screen feedback during it, that looked exactly
+like a hang on a blank screen (nothing calls consoleUpdate between
+"starting" and load_and_run_guest otherwise). Throttled so the SD
+card's own write speed is the bottleneck, not console text. */
 static void extract_game_data_proc(void *context, const char *file, unsigned long long done, unsigned long long total)
 {
+	static unsigned long long last_shown_mb;
+	unsigned long long done_mb = done / (1024 * 1024);
+
 	(void)context;
 	if (done == 0 || done == total)
 		logf_both("xiso: %s (%llu/%llu bytes overall)\n", file, done, total);
+	if (done != total && done_mb == last_shown_mb)
+		return;
+	last_shown_mb = done_mb;
+	printf("\x1b[2J\x1b[HExtracting Halo CE game data...\n\n%s\n%llu / %llu MB\n",
+		file, done_mb, total / (1024 * 1024));
+	consoleUpdate(NULL);
 }
 
 /* xiso_extract_maps always (re)writes into GAME_DATA_DIR/maps - this
