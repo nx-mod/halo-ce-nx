@@ -8,14 +8,23 @@ every fix below's reasoning.
 
 Also compiles the slice of port/linux/src (SWITCH_PLATFORM_FILES) and
 port/third_party/musl-math this guest can reuse as pure, portable
-compute - no host import needed. Still no ninja link rule: that step is
-done by hand against a manually-built guest_*.o runtime set for now (see
-PORTING.md's milestone 5/6 - formalize once there's a real
-port/switch/platform providing the rest, a GLES3 D3D8 translation layer
-analogous to port/vita/platform/d3d8_gxm.c). The remaining undefined
-symbols at that hand-linked stage are exactly D3D8/DirectSound/XInput/
-XNet/Win32 file-and-handle API/save-system - the real platform layer's
-job, not a bug.
+compute - no host import needed; port/switch/platform's null backend
+for what's left (D3D8 is now real, see below - DirectSound/XInput/XNet/
+Win32 file API/save-system are still null, PORTING.md's milestone 7);
+and now the real D3D8->GLES3 renderer (SWITCH_D3D8_FILES: d3d8_gl.c,
+d3d8_resources.c, gl_functions.c, nv2a_vsh.c, nv2a_psh.c - the same
+files Linux uses, Android's existing HALO_ANDROID GLES3 branches
+extended to HALO_SWITCH too, not a separate implementation) plus a
+generated guest/host import bridge, since the ILP32 guest cannot link
+against devkitPro's real (64-bit) GLES3 libraries directly:
+tools/android_gl_stubs.py (unmodified - reads gl.h's existing Android
+function list, writes guest-side wrappers around hostgl_<name> imports)
+and tools/android_imports.py (unmodified - turns host_imports.list +
+the generated GL import list into assembly trampolines through a
+host-filled table, mirrors guest_syscall.c-style host_log/host_write
+but generated now that there are >100 instead of 2). Still no ninja
+link rule: that step is done by hand against a manually-built guest_*.o
+runtime set for now (see PORTING.md's milestone 5/6/9).
 """
 
 import json
@@ -88,6 +97,17 @@ SWITCH_PLATFORM_FILES = [
     "tag_relocate.c", "frame_timing.c",
 ]
 
+# The real D3D8 device: Linux's own GLES3-over-OpenGL-4.5 renderer, whose
+# existing HALO_ANDROID branches (same GLES3.2 API, same guest/host split
+# shape) now also cover HALO_SWITCH - not a new implementation.
+SWITCH_D3D8_FILES = [
+    "d3d8_gl.c", "d3d8_resources.c", "gl_functions.c", "nv2a_vsh.c", "nv2a_psh.c", "xbox_textures.c",
+    "xgpu_text.c",
+]
+
+DEVKITPRO = Path(os.environ.get("DEVKITPRO", "/opt/devkitpro"))
+SWITCH_PORTLIBS_INCLUDE = DEVKITPRO / "portlibs" / "switch" / "include"
+
 MUSL_VERSION = "1.2.5"
 MUSL = GUEST_DIR / "third_party" / f"musl-{MUSL_VERSION}"
 MUSL_ARCH = GUEST_DIR / "libc" / "arch" / "aarch64_ilp32"
@@ -121,6 +141,40 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
         depfile="$out.d",
         deps="gcc",
     )
+    n.rule(
+        name="switch_as",
+        command="aarch64-none-elf-gcc -mabi=ilp32 -c $in -o $out",
+        description="SWITCH AS $out",
+    )
+    # unmodified Android generators (tools/android_gl_stubs.py,
+    # tools/android_imports.py) - see this file's own header comment.
+    # gl_stubs reads gl.h's existing Android function list against
+    # devkitPro's real GLES3 headers (same Khronos-registry format
+    # Android's sysroot headers use) and writes the guest-side wrappers
+    # plus the hostgl_* import names those wrappers call through.
+    gen_dir = BUILD / "gen"
+    guest_gl_c = gen_dir / "guest_gl.c"
+    gl_imports_list = gen_dir / "gl_imports.list"
+    n.rule(
+        name="switch_gl_stubs",
+        command=f"$python tools/android_gl_stubs.py $in {SWITCH_PORTLIBS_INCLUDE}/GLES3/gl32.h "
+                f"{SWITCH_PORTLIBS_INCLUDE}/GLES2/gl2ext.h {guest_gl_c} {gl_imports_list}",
+        description="SWITCH GL STUBS $out",
+    )
+    n.build(outputs=[guest_gl_c, gl_imports_list], rule="switch_gl_stubs", inputs=LINUX_DIR / "src" / "gl.h")
+    # imports merges host_imports.list (host_log/host_write/the six
+    # host_gl_* bridge functions) with the generated hostgl_* list into
+    # one assembly file of trampolines through a host-filled table -
+    # replaces the old hand-written guest_imports.S now that there are
+    # >100 imports instead of 2.
+    host_imports_list = SWITCH_DIR / "host_imports.list"
+    guest_imports_s = gen_dir / "guest_imports.s"
+    n.rule(
+        name="switch_imports",
+        command=f"$python tools/android_imports.py $out $in",
+        description="SWITCH IMPORTS $out",
+    )
+    n.build(outputs=guest_imports_s, rule="switch_imports", inputs=[host_imports_list, gl_imports_list])
     # the generated halo_msvc_semantics.h's "#pragma weak NAME" lines
     # hard-error under GCC for any NAME that also ends up static - see
     # PORTING.md. Every ordinary game TU gives these names static linkage
@@ -238,6 +292,31 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
         objects.append(obj)
         n.build(outputs=obj, rule="switch_cc", inputs=source, implicit=platform_implicit,
                 variables={"cflags": platform_cflags})
+
+    # the real D3D8 device (SWITCH_D3D8_FILES, see its comment) - same
+    # platform-layer treatment as SWITCH_PLATFORM_FILES, plus devkitPro's
+    # real GLES3/EGL headers (gl.h's HALO_SWITCH branch reads them).
+    d3d8_cflags = platform_cflags + f" -I{SWITCH_PORTLIBS_INCLUDE}"
+    d3d8_implicit = platform_implicit + [guest_gl_c]
+    for name in SWITCH_D3D8_FILES:
+        source = LINUX_DIR / "src" / name
+        obj = obj_dir / source.with_suffix(".o")
+        objects.append(obj)
+        n.build(outputs=obj, rule="switch_cc", inputs=source, implicit=d3d8_implicit,
+                variables={"cflags": d3d8_cflags})
+
+    # the generated guest-side GL wrappers (guest_gl_c) and import
+    # trampolines (guest_imports_s) - plain ILP32 C/asm, no game ABI and
+    # no platform-layer winsock dance, just devkitPro's real GLES3/GLES2
+    # headers for the former's own prototypes.
+    guest_gl_cflags = " ".join([abi, "-std=gnu11", "-w", f"-I{SWITCH_PORTLIBS_INCLUDE}", musl_includes])
+    guest_gl_obj = obj_dir / "guest_gl.o"
+    objects.append(guest_gl_obj)
+    n.build(outputs=guest_gl_obj, rule="switch_cc", inputs=guest_gl_c, implicit=[MUSL_LIB],
+            variables={"cflags": guest_gl_cflags})
+    guest_imports_obj = obj_dir / "guest_imports.o"
+    objects.append(guest_imports_obj)
+    n.build(outputs=guest_imports_obj, rule="switch_as", inputs=guest_imports_s)
 
     # halo_math.h's deterministic, lockstep-safe halo_sin/halo_cos/... -
     # musl's own math source, built the same way on every native port

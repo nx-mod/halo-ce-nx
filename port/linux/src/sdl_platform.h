@@ -8,6 +8,14 @@ controller emulation (see sdl_platform.c).
 #ifndef __HALO_LINUX_SDL_PLATFORM_H
 #define __HALO_LINUX_SDL_PLATFORM_H
 
+/* Switch has no SDL dependency at all (PORTING.md: libnx native hid for
+input, not written yet either) - struct platform_input_state is the one
+thing here that genuinely needs an SDL type (SDL_SCANCODE_COUNT), and
+nothing in the GLES3 renderer (d3d8_gl.c et al, which only wants this
+header for platform_video_... and platform_pump_events) touches it.
+Every other platform keeps it, cheap and harmless since they already
+have a real SDL3 dependency regardless. */
+#if !defined(HALO_SWITCH)
 #include <SDL3/SDL_scancode.h>
 
 #define PLATFORM_MOUSE_BUTTON_COUNT 8
@@ -24,6 +32,7 @@ struct platform_input_state
 	instead of the controller */
 	BOOL ui_pointer;
 };
+#endif
 
 struct platform_keystroke
 {

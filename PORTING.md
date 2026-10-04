@@ -502,6 +502,12 @@ multiple real game consumers, not pre-emptively, and this design is
 still actively churning (mallocng→oldmalloc and three real bugs, this
 session alone). Revisit once a second project actually needs it.
 
+Same call for the guest/host import bridge added in the "unstub video"
+milestone below (`tools/android_gl_stubs.py`, `tools/android_imports.py`,
+`port/switch/host_imports.list`) - also Halo-agnostic in practice (it's
+Android's halo-ce-universal generators, unmodified), also staying put
+until a second real consumer wants it, not pre-emptively.
+
 ## Platform layer plan (next milestone)
 
 The link in milestone 5 gives the exact symbol boundary `port/switch/platform`
@@ -657,6 +663,118 @@ which point the Milestone 7 "not reviewed for correctness" stubs (file
 I/O failing outright, D3D8 Creates claiming success with garbage
 pointers) are exactly where to expect the first real crashes, in
 roughly that order.
+
+### Milestone 9 - done: "unstub video" - the real D3D8->GLES3 renderer links, guest and host both
+
+Replaced `switch_d3d8_null.c` with the real thing: `port/linux/src/
+d3d8_gl.c` (and `d3d8_resources.c`, `gl_functions.c`, `nv2a_vsh.c`,
+`nv2a_psh.c`, `xbox_textures.c`, `xgpu_text.c`) already has a complete
+GLES3 path - it was written for Android, gated behind `HALO_ANDROID`
+throughout (~60 branches across those files). Extending every one of
+them to also cover `HALO_SWITCH` (`sed` across the lot, then fixing the
+two files the first sweep missed - `xgpu.h`'s `xgpu_capabilities`
+struct and `xbox_textures.c`) turned out to be the right amount of
+work: this is not a new renderer, it's Android's.
+
+The real new piece is the guest/host bridge the ILP32 guest needs to
+reach devkitPro's real (64-bit) GLES3 libraries at all - and Android
+already solved this exact problem for its own ILP32-guest-on-a-64-bit-
+host split. Reused its generators unmodified:
+- `tools/android_gl_stubs.py` reads gl.h's existing Android function
+  list against devkitPro's real `GLES3/gl32.h`/`GLES2/gl2ext.h` (same
+  Khronos-registry format Android's sysroot headers use) and writes
+  `guest_gl.c` (guest-side wrappers calling through `hostgl_<name>`
+  imports, widening args across the ABI boundary where needed) plus
+  the list of those 98 import names.
+- `tools/android_imports.py` turns that list plus `port/switch/
+  host_imports.list` (host_log/host_write, the six `host_gl_*` bridge
+  functions, and now `platform_video_initialize`/
+  `platform_video_drawable_size`/`platform_video_swap`/
+  `platform_pump_events`) into the actual assembly trampolines -
+  replacing the hand-written 2-entry `guest_imports.S` now that
+  there are 106.
+
+New `tools/switch_gl_resolve.py` (not from Android - Android resolves
+GL names at runtime via `dlsym` against a dynamically loaded
+`libGLESv3.so`; this host statically links devkitPro's real
+`libGLESv2.a`/`libEGL.a`, so a plain compile-time name->`&function`
+table needs no runtime lookup at all) generates the host's
+`hostgl_<name> -> real function` table from the same import list.
+`glShaderSource` is the one name needing a hand-written adapter: its
+generated guest wrapper widens each string pointer into a fixed array
+of 64-bit slots (matching `tools/android_gl_stubs.py`'s own special
+case for it), so the host side unwraps that back into a real
+`const char *const *` before calling the real `glShaderSource`.
+
+`port/switch/host/source/host_video.c` is the actual new host code:
+`platform_video_initialize` runs the exact EGL sequence
+`~/switch/nxvk/switch/smoke/gl_egl_tri.c` already proved on this
+hardware this session (`eglGetDisplay` -> `eglInitialize` ->
+`eglBindAPI` -> `eglChooseConfig` -> `eglCreateWindowSurface` on
+`nwindowGetDefault()` -> `eglCreateContext` -> `eglMakeCurrent`), plus
+the six `host_gl_*` helpers `xgpu.h`'s Android/Switch branch needs
+beyond the raw `hostgl_*` table (`host_gl_get_string`,
+`host_gl_has_extension`, `host_gl_read_buffer_word`,
+`host_gl_buffer_write`, `host_gl_fence_frame`, `host_gl_wait_frame`).
+Guest and host share one process's address space here (unlike
+Android's real cross-process split) - every pointer the guest passes
+is already a valid address this code can read or write directly, no
+marshaling needed.
+
+Real bugs found getting both sides to link, not just stubs:
+- **`glGetBufferSubData` doesn't exist in GLES3** (desktop-GL only) -
+  `host_gl_read_buffer_word` uses `glMapBufferRange`/`glUnmapBuffer`
+  instead.
+- **The host NRO's `LIBS` needed `-lstdc++ -lm`** alongside
+  `-lEGL -lGLESv2 -lglapi -ldrm_nouveau -lnx` (devkitPro's own
+  `es2gears` example has the exact line) - `libEGL.a`'s NVK/Mesa driver
+  internals are C++ (`nv50_ir`'s codegen), so even a plain-C project
+  needs the C++ runtime for `operator new`/`delete` and friends; and
+  Mesa's GLSL constant folder calls libm directly (`powf`, `sinf`, ...).
+- **A real, hardware-confirmed bug**, not caught until an actual
+  deploy: `switch_guest_abi.h`'s `import_count` field had to become
+  "the address of a `uint32_t`" rather than "the count itself" (the
+  same reason `import_table`/`import_names` already were addresses -
+  a symbol's value is only known at link time, not something a static
+  initializer can fold in as a constant). `guest_main.c` and the
+  header's comment were fixed for this; `host_main.c`'s reader was
+  not, in the same pass - it kept reading the raw address as if it
+  were the count directly. Result on real hardware: no crash, just
+  `import_count=1076888024` and a `host.log` growing without bound as
+  the loop walked billions of "imports" out of whatever bytes
+  followed in memory - a hang that looked exactly like a hang, because
+  it was one, just not an infinite one. Fixed by dereferencing
+  `import_count` through the same vaddr->`data_heap` translation
+  `import_table`/`import_names` already got.
+
+Also wired up while deploying, not strictly "video": `port/linux/src/
+xiso.c`'s existing `xiso_extract_maps` (used by the desktop ports for
+"first start without game data") now runs on the Switch host too, via
+a new `HALO_SWITCH_HOST` branch in its own `#include` lines
+(`switch_host_posix_shim.h` instead of the full `platform.h`/`posix.h`
+- this host doesn't need their XDK/winsock machinery for three plain
+POSIX-shaped calls) and a thin `host_xiso.c` wrapper (`#define
+HALO_SWITCH_HOST` then `#include` the real, shared `xiso.c` - one
+canonical file, not a copy). `host_main.c` extracts
+`sdmc:/haloce-nx/halo.xiso` to `sdmc:/haloce-nx/maps` on first run
+(a `.extracted` marker file skips re-extracting a multi-GB image on
+every launch) and otherwise leaves an already-populated `maps` folder
+alone - supports a bare xiso, pre-extracted data, or both sitting
+there, same as the desktop ports. Game data lives at `sdmc:/haloce-nx/`
+deliberately separate from `sdmc:/switch/halo-ce-nx-guest-poc/`'s own
+app binaries/log - different lifecycle (gigabytes, user-supplied,
+survives a reinstall) from a homebrew app's usual folder.
+
+**Not yet wired up despite all of this linking and deploying cleanly**:
+`guest_main.c`'s `__guest_entry` is *still* the Milestone 2 printf/
+malloc smoke test - it never calls `platform_video_initialize` or
+anything else in the real renderer, so nothing has actually drawn a
+pixel yet. Getting the full link/deploy loop itself exercised (icon,
+app title "Halo", the `import_count` hang found and fixed on real
+hardware) was this milestone's actual scope. Wiring the entry to the
+game's real bootstrap is the next, now fully-scoped step - at which
+point the Milestone 7 stubs are where to expect the first real
+rendering-side crashes.
 
 ## Unexplored
 

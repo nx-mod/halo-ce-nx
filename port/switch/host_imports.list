@@ -1,0 +1,19 @@
+# Host functions the guest imports (declared in
+# port/switch/guest/guest_host.h, defined in port/switch/host). The
+# generated hostgl_* GL entry points (build/switch/gen/gl_imports.list,
+# from tools/android_gl_stubs.py - gl.h's Android list is reused as-is,
+# same GLES3.2 API, same devkitPro headers) are merged with this list by
+# tools/android_imports.py, which both generators come from unmodified -
+# see PORTING.md's "unstub video" milestone.
+host_log
+host_write
+host_gl_get_string
+host_gl_has_extension
+host_gl_read_buffer_word
+host_gl_buffer_write
+host_gl_fence_frame
+host_gl_wait_frame
+platform_video_initialize
+platform_video_drawable_size
+platform_video_swap
+platform_pump_events

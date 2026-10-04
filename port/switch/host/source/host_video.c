@@ -1,0 +1,196 @@
+/*
+HOST_VIDEO.C
+
+The host side of the GLES3 renderer bridge (PORTING.md's "unstub video"
+milestone): the window/context functions the guest's platform_video_...
+and platform_pump_events call directly, and the six host_gl_ helpers
+port/linux/src/xgpu.h's HALO_ANDROID/HALO_SWITCH branch needs beyond the
+generated hostgl_<name> entry-point table (host_gl_resolve.c).
+
+EGL sequence is the one ~/switch/nxvk/switch/smoke/gl_egl_tri.c already
+proved on real hardware this session (PORTING.md): eglGetDisplay ->
+eglInitialize -> eglBindAPI -> eglChooseConfig -> eglCreateWindowSurface
+on nwindowGetDefault() -> eglCreateContext -> eglMakeCurrent. Guest and
+host share one process's address space (unlike Android's guest/host
+split across real process boundaries) - every pointer the guest passes
+here is already a valid address this code can read or write directly,
+no marshaling needed.
+
+NOT yet run on hardware - see PORTING.md's own caveat on every stub this
+session. consoleExit happens lazily, the first time platform_video_initialize
+is actually called (from inside the guest's entry, already running on
+this thread by the time that happens) rather than unconditionally in
+main(), so the debug console text still shows up for host_main.c's own
+startup/error logging first.
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <switch.h>
+
+#include <EGL/egl.h>
+#include <GLES3/gl32.h>
+
+static EGLDisplay s_display = EGL_NO_DISPLAY;
+static EGLSurface s_surface = EGL_NO_SURFACE;
+static EGLContext s_context = EGL_NO_CONTEXT;
+
+int platform_video_initialize(unsigned long width, unsigned long height)
+{
+	static const EGLint config_attribs[] = {
+		EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+		EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+		EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
+		EGL_DEPTH_SIZE, 24, EGL_STENCIL_SIZE, 8,
+		EGL_NONE,
+	};
+	static const EGLint context_attribs[] = {
+		EGL_CONTEXT_MAJOR_VERSION, 3,
+		EGL_CONTEXT_MINOR_VERSION, 2,
+		EGL_NONE,
+	};
+	EGLConfig config;
+	EGLint config_count = 0;
+
+	(void)width;
+	(void)height;
+	/* consoleInit (host_main.c's main()) claimed the default window for
+	text; the guest's own rendering needs it from here on */
+	consoleExit(NULL);
+
+	s_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+	if (s_display == EGL_NO_DISPLAY)
+		return 0;
+	if (!eglInitialize(s_display, NULL, NULL))
+		return 0;
+	if (!eglBindAPI(EGL_OPENGL_ES_API))
+		return 0;
+	if (!eglChooseConfig(s_display, config_attribs, &config, 1, &config_count) || config_count < 1)
+		return 0;
+	s_surface = eglCreateWindowSurface(s_display, config, nwindowGetDefault(), NULL);
+	if (s_surface == EGL_NO_SURFACE)
+		return 0;
+	s_context = eglCreateContext(s_display, config, EGL_NO_CONTEXT, context_attribs);
+	if (s_context == EGL_NO_CONTEXT)
+		return 0;
+	if (!eglMakeCurrent(s_display, s_surface, s_surface, s_context))
+		return 0;
+	return 1;
+}
+
+void platform_video_drawable_size(int *width, int *height)
+{
+	EGLint w = 0, h = 0;
+
+	if (s_display != EGL_NO_DISPLAY)
+	{
+		eglQuerySurface(s_display, s_surface, EGL_WIDTH, &w);
+		eglQuerySurface(s_display, s_surface, EGL_HEIGHT, &h);
+	}
+	if (width)
+		*width = w;
+	if (height)
+		*height = h;
+}
+
+void platform_video_swap(void)
+{
+	if (s_display != EGL_NO_DISPLAY)
+		eglSwapBuffers(s_display, s_surface);
+}
+
+/* main thread only (the guest's own comment in sdl_platform.h) - this
+host has exactly one thread, the one running the guest's entry point,
+so that's trivially satisfied. appletMainLoop's job (detect HOME menu
+requests, keep the applet alive) has no real guest-side equivalent to
+hand control back to mid-frame yet, so exiting the whole process on
+"the applet wants to close" is the simplest correct behavior for now
+- the alternative (silently ignoring it) hangs the console instead. */
+void platform_pump_events(void)
+{
+	if (!appletMainLoop())
+	{
+		if (s_display != EGL_NO_DISPLAY)
+			eglMakeCurrent(s_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+		exit(0);
+	}
+}
+
+/* ---------- xgpu.h's six host_gl_* helpers */
+
+void host_gl_get_string(unsigned int name, int index, char *buffer, unsigned int size)
+{
+	const unsigned char *text;
+
+	if (!size)
+		return;
+	text = index >= 0 ? glGetStringi(name, (GLuint)index) : glGetString(name);
+	if (!text)
+	{
+		buffer[0] = '\0';
+		return;
+	}
+	snprintf(buffer, size, "%s", (const char *)text);
+}
+
+int host_gl_has_extension(const char *name)
+{
+	GLint count = 0, i;
+
+	glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+	for (i = 0; i < count; i++)
+	{
+		const char *extension = (const char *)glGetStringi(GL_EXTENSIONS, (GLuint)i);
+
+		if (extension && !strcmp(extension, name))
+			return 1;
+	}
+	return 0;
+}
+
+unsigned int host_gl_read_buffer_word(unsigned int buffer, unsigned int offset)
+{
+	/* GLES3 has no glGetBufferSubData (desktop-GL only) - map the one
+	word needed instead */
+	unsigned int value = 0;
+	void *mapped;
+
+	glBindBuffer(GL_ARRAY_BUFFER, buffer);
+	mapped = glMapBufferRange(GL_ARRAY_BUFFER, (GLintptr)offset, sizeof(value), GL_MAP_READ_BIT);
+	if (mapped)
+	{
+		memcpy(&value, mapped, sizeof(value));
+		glUnmapBuffer(GL_ARRAY_BUFFER);
+	}
+	return value;
+}
+
+void host_gl_buffer_write(unsigned int target, unsigned int offset, unsigned int size, const void *data)
+{
+	glBufferSubData(target, (GLintptr)offset, (GLsizeiptr)size, data);
+}
+
+/* a small ring of fences, one per in-flight frame slot - fence_frame
+marks "the GPU work queued so far is slot N's", wait_frame blocks until
+the GPU finishes whatever was last fenced for that same slot (so the
+CPU never gets more than a few frames ahead of the GPU) */
+#define FRAME_RING 4
+static GLsync s_frame_fences[FRAME_RING];
+
+void host_gl_fence_frame(unsigned int slot)
+{
+	GLsync *fence = &s_frame_fences[slot % FRAME_RING];
+
+	if (*fence)
+		glDeleteSync(*fence);
+	*fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+}
+
+void host_gl_wait_frame(unsigned int slot)
+{
+	GLsync fence = s_frame_fences[slot % FRAME_RING];
+
+	if (fence)
+		glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, (GLuint64)-1);
+}

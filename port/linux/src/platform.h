@@ -110,11 +110,16 @@ The Xbox maps physical memory at virtual 0x80000000 + P. The layer reserves
 that window at start-up and hands out page-granular blocks from it, so the
 physical/virtual arithmetic the game and Direct3D rely on keeps working. */
 
-#ifdef HALO_VITA
-/* The Vita cannot choose addresses: the window is one block the host
-allocated (port/vita/host/vita_main.c), wherever it landed, and physical
-addresses are offsets into it. Its first page is never handed out, so no
-block has physical address 0 (which Direct3D reads as none). */
+#if defined(HALO_VITA) || defined(HALO_SWITCH)
+/* Neither the Vita nor this guest can assume a fixed virtual address is
+free the way Linux's real mmap(..., 0x80000000, ...) can: the Vita's
+window is one block the host allocated (port/vita/host/vita_main.c),
+wherever it landed; this guest's is a plain static array the linker
+places somewhere in its own flat image (port/switch/guest/
+guest_contiguous_memory.c) - known only once linked, not at compile
+time, so it's a runtime variable here too. Physical addresses are
+offsets into whichever block it is. Its first page is never handed
+out, so no block has physical address 0 (which Direct3D reads as none). */
 extern unsigned long platform_contiguous_base;
 #define PLATFORM_CONTIGUOUS_BASE platform_contiguous_base
 #define PLATFORM_CONTIGUOUS_SIZE 0x07000000UL /* 112 MB */

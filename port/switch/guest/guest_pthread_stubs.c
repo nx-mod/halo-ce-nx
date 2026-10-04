@@ -41,6 +41,7 @@ int pthread_attr_getstack(const pthread_attr_t *attr, void **addr, size_t *size)
 }
 
 int pthread_getattr_np(pthread_t thread, pthread_attr_t *attr) { (void)thread; (void)attr; return 0; }
+int pthread_detach(pthread_t thread) { (void)thread; return 0; }
 
 int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr) { (void)mutex; (void)attr; return 0; }
 int pthread_mutex_lock(pthread_mutex_t *mutex) { (void)mutex; return 0; }

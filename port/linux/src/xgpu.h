@@ -13,7 +13,7 @@ device itself (d3d8_gl.c).
 #include "platform.h"
 #include "gl.h"
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) || defined(HALO_SWITCH)
 /* OpenGL ES features that are optional (d3d8_gl.c gl_initialize) */
 struct xgpu_capabilities
 {
@@ -124,7 +124,7 @@ struct nv2a_pixel_shader_key
 
 char *nv2a_pixel_shader_to_glsl(const struct nv2a_pixel_shader_key *key);
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) || defined(HALO_SWITCH)
 /* ES samplers have no LOD bias of their own */
 #define XGPU_PIXEL_UNIFORMS_ES "uniform vec4 texture_lod_bias;\n"
 #else

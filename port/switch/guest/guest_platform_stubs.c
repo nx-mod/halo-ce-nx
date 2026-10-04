@@ -68,6 +68,45 @@ const char *config_string(const char *name)
 	return "";
 }
 
+long config_integer(const char *name)
+{
+	(void)name;
+	return 0;
+}
+
+/* source/rasterizer/xbox/rasterizer_xbox_decals.c - the real GLES3
+backend (switch_d3d8_null.c's successor) doesn't have an equivalent for
+this contiguous-stream-attribute trick */
+void halo_d3d_stream_attribute(long reg, long stream)
+{
+	(void)reg;
+	(void)stream;
+}
+
+/* frames between the 30 Hz ticks at the display's refresh rate -
+port/linux/include/halo_linux_source_fixups.h; the real backend reads
+display.interpolation itself once config_boolean is real */
+int halo_interpolation_enabled(void)
+{
+	return 0;
+}
+
+/* source/game/player_control.c - no real gamepad-as-mouse backend yet
+(PORTING.md: input is libnx hid, not written yet either) */
+int halo_linux_mouse_look(short gamepad_index, float *yaw, float *pitch)
+{
+	(void)gamepad_index;
+	if (yaw) *yaw = 0.0f;
+	if (pitch) *pitch = 0.0f;
+	return 0;
+}
+
+/* source/main.c and friends: a generation counter bumped whenever a
+display/audio/input setting changes, so callers can re-read it once.
+config_boolean/real/string/integer above never report a change, so
+this never needs to move either. */
+volatile unsigned long halo_settings_generation;
+
 /* real host-synced high-res timing isn't wired up yet (no host_* import
 for it) - a monotonically-meaningless 0 until then. Every caller treats
 this as "time since some epoch", so returning a constant just means

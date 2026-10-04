@@ -41,8 +41,11 @@ TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
-INCLUDES	:=	include
+INCLUDES	:=	include ../../linux/src source
 #ROMFS	:=	romfs
+
+APP_TITLE	:=	Halo
+APP_AUTHOR	:=	nx-mod
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -59,7 +62,7 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lnx
+LIBS	:= -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lnx -lstdc++ -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing

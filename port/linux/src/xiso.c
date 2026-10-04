@@ -62,8 +62,19 @@ includes software developed by in <in@fishtank.com>.
 /* (the desktop ports only: the Android app imports the game data itself) */
 #ifndef HALO_NOT_DESKTOP
 
+/* HALO_SWITCH_HOST: the Switch's native 64-bit host (port/switch/host),
+not the ILP32 guest (HALO_SWITCH) - a plain desktop-shaped binary with
+no XDK/winsock compatibility concerns of its own, so pulling in the
+full platform.h/posix.h machinery (built for the game's MSVC-ABI side)
+is unnecessary weight for the three functions this file actually calls
+through them. switch_host_posix_shim.h provides just those three, for
+real (host_xiso_support.c), not as placeholders. */
+#ifdef HALO_SWITCH_HOST
+#include "switch_host_posix_shim.h"
+#else
 #include "platform.h"
 #include "posix.h"
+#endif
 #include "xiso.h"
 
 #include <fcntl.h>

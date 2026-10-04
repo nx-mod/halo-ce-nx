@@ -44,7 +44,11 @@ struct guest_header
 	uint32_t image_end;        /* end of .bss, size to commit */
 	uint32_t import_table;     /* address of uint64_t[import_count], filled by the host */
 	uint32_t import_names;     /* address of import_count NUL-terminated names, back to back */
-	uint32_t import_count;     /* the count itself */
+	uint32_t import_count;     /* address of a uint32_t holding the count - not the
+	                               count itself, since that's only known at link time
+	                               as a symbol's value, not a compile-time constant
+	                               this static initializer could fold in directly
+	                               (mirrors halo-ce-universal's Android host_loader.c) */
 	uint32_t entry;            /* void __guest_entry(void) */
 };
 

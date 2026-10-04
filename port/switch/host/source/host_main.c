@@ -18,9 +18,11 @@ needs to execute.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <switch.h>
 
 #include "../../include/switch_guest_abi.h"
+#include "xiso.h"
 
 static FILE *g_log;
 
@@ -66,9 +68,37 @@ struct host_function
 	void *address;
 };
 
+/* the real GLES3 bridge: window/context (host_video.c, PORTING.md's
+"unstub video" milestone), plus the 98 hostgl_<name> raw GL entry
+points (host_gl_resolve.c, generated from build/switch/gen/gl_imports.list -
+tools/switch_gl_resolve.py), resolved through host_gl_resolve's own
+fallback the same way Android's host_loader.c falls back for its
+identically-shaped hostgl_ names. */
+int platform_video_initialize(unsigned long width, unsigned long height);
+void platform_video_drawable_size(int *width, int *height);
+void platform_video_swap(void);
+void platform_pump_events(void);
+void host_gl_get_string(unsigned int name, int index, char *buffer, unsigned int size);
+int host_gl_has_extension(const char *name);
+unsigned int host_gl_read_buffer_word(unsigned int buffer, unsigned int offset);
+void host_gl_buffer_write(unsigned int target, unsigned int offset, unsigned int size, const void *data);
+void host_gl_fence_frame(unsigned int slot);
+void host_gl_wait_frame(unsigned int slot);
+void *host_gl_resolve(const char *name);
+
 static const struct host_function kHostFunctions[] = {
 	{"host_log", (void *)host_log_impl},
 	{"host_write", (void *)host_write_impl},
+	{"platform_video_initialize", (void *)platform_video_initialize},
+	{"platform_video_drawable_size", (void *)platform_video_drawable_size},
+	{"platform_video_swap", (void *)platform_video_swap},
+	{"platform_pump_events", (void *)platform_pump_events},
+	{"host_gl_get_string", (void *)host_gl_get_string},
+	{"host_gl_has_extension", (void *)host_gl_has_extension},
+	{"host_gl_read_buffer_word", (void *)host_gl_read_buffer_word},
+	{"host_gl_buffer_write", (void *)host_gl_buffer_write},
+	{"host_gl_fence_frame", (void *)host_gl_fence_frame},
+	{"host_gl_wait_frame", (void *)host_gl_wait_frame},
 };
 
 static void *resolve_import(const char *name)
@@ -76,6 +106,8 @@ static void *resolve_import(const char *name)
 	for (size_t i = 0; i < sizeof(kHostFunctions) / sizeof(kHostFunctions[0]); i++)
 		if (!strcmp(kHostFunctions[i].name, name))
 			return kHostFunctions[i].address;
+	if (!strncmp(name, "hostgl_", 7))
+		return host_gl_resolve(name);
 	return NULL;
 }
 
@@ -204,19 +236,30 @@ static int load_and_run_guest(const char *path)
 		teardown(&gs);
 		return -1;
 	}
-	logf_both("guest header OK: image_end=0x%x import_table=0x%x import_names=0x%x "
-		"import_count=%u entry=0x%x\n",
-		header_in_file->image_end, header_in_file->import_table, header_in_file->import_names,
-		header_in_file->import_count, header_in_file->entry);
-
-	/* resolve imports, writing resolved addresses into the data heap
-	while it's still ours to write - once svcMapMemory moves it, this
-	pointer stops being valid (nx-mapmem-poc's lesson, again) */
+	/* import_count holds the address of a uint32_t, not the count itself
+	(switch_guest_abi.h: only known as a symbol's value at link time, not
+	a constant this header's own static initializer could fold in) -
+	dereference it the same way import_table/import_names get translated
+	below, before logging or looping on it. Getting this wrong doesn't
+	crash - it reads whatever raw pointer value was stored as a giant
+	bogus loop count instead, which looks like a hang, not a crash. */
 	{
+		const uint32_t *count_ptr = (const uint32_t *)((char *)gs.data_heap +
+			(header_in_file->import_count - gs.data_vaddr));
+		uint32_t import_count = *count_ptr;
+
+		logf_both("guest header OK: image_end=0x%x import_table=0x%x import_names=0x%x "
+			"import_count=%u entry=0x%x\n",
+			header_in_file->image_end, header_in_file->import_table, header_in_file->import_names,
+			import_count, header_in_file->entry);
+
+		/* resolve imports, writing resolved addresses into the data heap
+		while it's still ours to write - once svcMapMemory moves it, this
+		pointer stops being valid (nx-mapmem-poc's lesson, again) */
 		uint64_t *table = (uint64_t *)((char *)gs.data_heap + (header_in_file->import_table - gs.data_vaddr));
 		const char *name = (const char *)gs.data_heap + (header_in_file->import_names - gs.data_vaddr);
 
-		for (uint32_t i = 0; i < header_in_file->import_count; i++)
+		for (uint32_t i = 0; i < import_count; i++)
 		{
 			void *function = resolve_import(name);
 
@@ -311,12 +354,70 @@ static int load_and_run_guest(const char *path)
 	return 0;
 }
 
+/* sdmc:/haloce-nx/ - game data (the xiso, the maps extracted from it),
+separate from sdmc:/switch/halo-ce-nx-guest-poc/'s app binaries/log:
+different lifecycle (gigabytes, user-supplied, survives a reinstall),
+different convention (not every homebrew app's own folder needs a
+multi-GB disc image sitting in it). */
+#define GAME_DATA_DIR "sdmc:/haloce-nx"
+#define GAME_XISO_PATH GAME_DATA_DIR "/halo.xiso"
+
+static void extract_game_data_proc(void *context, const char *file, unsigned long long done, unsigned long long total)
+{
+	(void)context;
+	if (done == 0 || done == total)
+		logf_both("xiso: %s (%llu/%llu bytes overall)\n", file, done, total);
+}
+
+/* xiso_extract_maps always (re)writes into GAME_DATA_DIR/maps - this
+just avoids redoing a multi-GB extraction on every single launch once
+it has already succeeded once. Supports both of the shapes a player
+might have on their SD card: GAME_XISO_PATH alone (extracted here on
+first run) or GAME_DATA_DIR/maps already populated some other way
+(skipped here, used as-is) - PORTING.md's "unstub video" notes. */
+static void ensure_game_data_extracted(void)
+{
+	struct stat info;
+	char marker[256];
+
+	snprintf(marker, sizeof(marker), "%s/maps/.extracted", GAME_DATA_DIR);
+	if (stat(marker, &info) == 0)
+	{
+		logf_both("game data already extracted at %s/maps\n", GAME_DATA_DIR);
+		return;
+	}
+	if (stat(GAME_XISO_PATH, &info) != 0)
+	{
+		logf_both("no xiso at %s and no extracted maps yet - game data unavailable\n", GAME_XISO_PATH);
+		return;
+	}
+	{
+		char error[256] = {0};
+
+		logf_both("extracting maps from %s to %s ...\n", GAME_XISO_PATH, GAME_DATA_DIR);
+		if (xiso_extract_maps(GAME_XISO_PATH, GAME_DATA_DIR, extract_game_data_proc, NULL, error, sizeof(error)))
+		{
+			FILE *marker_file = fopen(marker, "w");
+
+			if (marker_file)
+				fclose(marker_file);
+			logf_both("extraction done.\n");
+		}
+		else
+		{
+			logf_both("extraction FAILED: %s\n", error);
+		}
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	consoleInit(NULL);
 
 	g_log = fopen("sdmc:/switch/halo-ce-nx-guest-poc/host.log", "w");
 	logf_both("halo-ce-nx guest-poc host starting\n");
+
+	ensure_game_data_extracted();
 
 	if (load_and_run_guest("sdmc:/switch/halo-ce-nx-guest-poc/guest.elf") == 0)
 		logf_both("SUCCESS: the guest loaded, ran and called back into the host.\n");
