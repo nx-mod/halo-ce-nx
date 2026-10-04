@@ -79,14 +79,30 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 	return 1;
 }
 
+extern void logf_both(const char *fmt, ...);
+
 void platform_video_drawable_size(int *width, int *height)
 {
 	EGLint w = 0, h = 0;
+	int ok = 0;
 
 	if (s_display != EGL_NO_DISPLAY)
 	{
-		eglQuerySurface(s_display, s_surface, EGL_WIDTH, &w);
-		eglQuerySurface(s_display, s_surface, EGL_HEIGHT, &h);
+		/* also never checked before this - if either query silently
+		failed, w/h stay 0, which the guest then feeds straight into
+		glViewport(0,0,0,0) (every draw clipped to a zero-area viewport
+		- no GL error, nothing visible) and a height/width aspect ratio
+		of 0/0 = NaN (every vertex's x becomes NaN - also no GL error,
+		also nothing visible). Either one alone reproduces "no text"
+		exactly, with every other diagnostic staying clean. */
+		ok = eglQuerySurface(s_display, s_surface, EGL_WIDTH, &w) &&
+			eglQuerySurface(s_display, s_surface, EGL_HEIGHT, &h);
+	}
+	logf_both("platform_video_drawable_size: %dx%d (query %s)", (int)w, (int)h, ok ? "ok" : "FAILED");
+	if (!ok || w <= 0 || h <= 0)
+	{
+		w = 1280;
+		h = 720;
 	}
 	if (width)
 		*width = w;
