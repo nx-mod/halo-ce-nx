@@ -69,6 +69,14 @@ void __guest_entry(void)
 
 	host_log("guest entry done - musl held up");
 
-	extern void guest_text_demo(void);
-	guest_text_demo();
+	/* the real thing: source/shell/shell_xbox.c's own main() - already
+	compiled and linked (unlike Vita, which excludes this file since its
+	own host provides main instead; nothing excludes it for Switch, so
+	it's just sat there as an unused extern symbol until now). Milestone
+	10's guest_text_demo() already proved the GL pipeline separately -
+	not called here too, to keep whatever happens next unambiguous. */
+	host_log("calling the game's real main() now");
+	extern int main(void);
+	main();
+	host_log("the game's main() returned (this is not expected in normal play)");
 }

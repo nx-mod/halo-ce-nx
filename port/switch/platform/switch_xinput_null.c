@@ -126,19 +126,36 @@ unsigned long __stdcall XLaunchNewImageA(const char *, struct _LAUNCH_DATA *)
 	return 0;
 }
 
-void *__stdcall XPhysicalAlloc(unsigned long, unsigned long, unsigned long, unsigned long)
+/* source/cache/physical_memory_map.c's physical_memory_allocate() - the
+SECOND real call main() makes, right after fuck_code_in_the_eye() -
+calls this for the game's core data (game state, tag cache, texture
+cache, sound cache) and match_assert()s the result is non-NULL. A
+plain "return 0" here isn't a safe placeholder like most of this
+file's stubs are (this file's own header comment) - it's an immediate
+crash on startup, before any game or rendering code ever runs. Real
+implementation instead, matching port/linux/src/xbox_memory.c's exact
+wrapper (including its parameter swap: XPhysicalAlloc's own
+(size, physical_address, alignment, protect) vs
+platform_contiguous_alloc's (size, alignment, physical_address,
+protect)) over switch_contiguous_memory.c's allocator - written in
+Milestone 9 but never actually connected to anything until now. */
+void *__stdcall XPhysicalAlloc(unsigned long size, unsigned long physical_address, unsigned long alignment,
+	unsigned long protect)
 {
-	return 0;
+	return platform_contiguous_alloc(size, alignment,
+		physical_address < PLATFORM_CONTIGUOUS_SIZE ? physical_address : PLATFORM_ANY_PHYSICAL_ADDRESS, protect);
 }
 
-void __stdcall XPhysicalFree(void *)
+void __stdcall XPhysicalFree(void *address)
 {
-	
+	platform_contiguous_free(address);
 }
 
-void __stdcall XPhysicalProtect(void *, unsigned long, unsigned long)
+void __stdcall XPhysicalProtect(void *address, unsigned long size, unsigned long protect)
 {
-	
+	(void)address;
+	(void)size;
+	(void)protect;
 }
 
 unsigned long __stdcall XQueryMemoryProtect(void *)
@@ -146,14 +163,28 @@ unsigned long __stdcall XQueryMemoryProtect(void *)
 	return 0;
 }
 
+/* source/shell/shell_xbox.c's main() calls fuck_code_in_the_eye() (an
+anti-tamper check) unconditionally, first thing, before anything else -
+it walks modules/sections in a "while (Dm...(...) != XBDM_ENDOFLIST)"
+loop. Returning plain 0 ("success", meaning "here's a module") instead
+of XBDM_ENDOFLIST would make that loop spin forever on startup, since
+0 != XBDM_ENDOFLIST is always true and nothing here ever writes to the
+*module/*section output the loop then goes on to read. "No modules to
+walk" is also the honestly correct answer - there's no real Xbox debug
+monitor module list behind this. */
 HRESULT __stdcall DmWalkLoadedModules(PDM_WALK_MODULES *walk, PDMN_MODLOAD module)
 {
-	return 0;
+	(void)walk;
+	(void)module;
+	return XBDM_ENDOFLIST;
 }
 
 HRESULT __stdcall DmWalkModuleSections(PDM_WALK_MODSECT *walk, const char *module_name, PDMN_SECTIONLOAD section)
 {
-	return 0;
+	(void)walk;
+	(void)module_name;
+	(void)section;
+	return XBDM_ENDOFLIST;
 }
 
 HRESULT __stdcall DmCloseModuleSections(PDM_WALK_MODSECT walk)
