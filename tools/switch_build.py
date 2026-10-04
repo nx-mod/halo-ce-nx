@@ -83,7 +83,10 @@ SWITCH_GAME_FLAGS = [f for f in GAME_FLAGS if f != "-Wno-error=incompatible-func
 # (xbox_kernel.c, xnet.c, dsound_sdl.c, xinput_sdl.c, d3d8_gl.c, ...) is
 # either SDL-tied (wrong for Switch - see PORTING.md's platform-layer
 # plan) or needs a real host_* import that doesn't exist yet.
-SWITCH_PLATFORM_FILES = ["halo_linker_common.c", "msvc_crt.c", "msvc_wide.c", "bink_null.c"]
+SWITCH_PLATFORM_FILES = [
+    "halo_linker_common.c", "msvc_crt.c", "msvc_wide.c", "bink_null.c",
+    "tag_relocate.c", "frame_timing.c",
+]
 
 MUSL_VERSION = "1.2.5"
 MUSL = GUEST_DIR / "third_party" / f"musl-{MUSL_VERSION}"
@@ -221,6 +224,16 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
     ])
     for name in SWITCH_PLATFORM_FILES:
         source = LINUX_DIR / "src" / name
+        obj = obj_dir / source.with_suffix(".o")
+        objects.append(obj)
+        n.build(outputs=obj, rule="switch_cc", inputs=source, implicit=platform_implicit,
+                variables={"cflags": platform_cflags})
+
+    # the Switch-only "headless boot" null backend (PORTING.md's milestone
+    # 7): D3D8/DirectSound/XInput/XNet/Win32/posix, as safe no-ops/failures
+    # rather than real rendering/audio/input/networking/file-I/O. Same
+    # platform-layer treatment as SWITCH_PLATFORM_FILES above.
+    for source in sorted((SWITCH_DIR / "platform").glob("*.c")):
         obj = obj_dir / source.with_suffix(".o")
         objects.append(obj)
         n.build(outputs=obj, rule="switch_cc", inputs=source, implicit=platform_implicit,

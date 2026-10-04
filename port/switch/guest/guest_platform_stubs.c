@@ -18,6 +18,7 @@ host_* imports). Left undefined on purpose until that exists.
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 extern void host_log(const char *text);
 
@@ -82,4 +83,27 @@ PORTING.md: input goes through libnx's hid directly, not SDL) */
 void test_input_hold_action(int hold)
 {
 	(void)hold;
+}
+
+/* musl's own src/time/__tz.c is excluded (build_musl.sh: real tzdata
+file parsing, deferred along with real file I/O) - but localtime_r.c,
+mktime.c and strftime.c call its two internal entry points
+unconditionally, not just when a real zoneinfo file exists. UTC with no
+DST is a genuinely correct answer, not a placeholder lie - just the
+simplest one, until there's a real timezone database to read. */
+void __secs_to_zone(long long t, int local, int *isdst, long *offset, long *oppoff, const char **zonename)
+{
+	(void)t;
+	(void)local;
+	*isdst = 0;
+	*offset = 0;
+	if (oppoff)
+		*oppoff = 0;
+	*zonename = "UTC";
+}
+
+const char *__tm_to_tzname(const struct tm *tm)
+{
+	(void)tm;
+	return "UTC";
 }

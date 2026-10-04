@@ -536,6 +536,128 @@ section is ever stale, or ask):
   logic and the platform-layer *shape* before spending time on a GL
   backend.
 
+### Milestone 7 - done: a "headless boot" null platform layer, generated from real XDK signatures
+
+Wrote `port/switch/platform/` - the Switch-only null backend for
+everything D3D8/DirectSound/XInput/XNet/Win32/save-game-API that the
+"real platform layer" bucket from Milestone 6 needed: safe no-ops or
+failure returns instead of real rendering/audio/input/networking/file
+I/O, so the link resolves without yet building any of those real
+backends. Six new files (`switch_d3d8_null.c`, `switch_dsound_null.c`,
+`switch_xinput_null.c`, `switch_xnet_null.c`, `switch_win32_null.c`,
+`switch_posix_null.c`), wired into `tools/switch_build.py` the same way
+as `SWITCH_PLATFORM_FILES` (gnu11, `-DHALO_LINUX_PLATFORM_LAYER`).
+
+Every signature is real, not guessed: a one-time script
+(`/tmp/gen_stubs.py`, not checked in - this was exploratory, not meant
+to be re-run) scraped the exact declaration for ~230 of the ~280
+remaining undefined symbols straight out of `port/include/xdk/xdk_pdb.h`
+(and `xdk_xbdm.h` for the three `Dm*` debug-monitor calls), generating
+`ret name(params) { body }` mechanically. The handful outside pdb.h
+(`D3DXGetErrorStringA`, `d3d_find_flipcount`, `halo_d3d_*`,
+`halo_screen_*`, `halo_settings_generation`, `halo_linux_mouse_look`,
+`halo_render_draw_counts`) were found by grepping their real call sites
+in `source/` for an inline `extern` declaration instead.
+
+Default body is `return 0;` (or empty, for `void`) - safe for most of
+this (`D3DDevice_SetRenderState_*` et al are genuine no-ops; `XInitDevices`
+reporting zero devices is the real, already-handled "no controller"
+path). Fixed to the *real* failure sentinel where 0 is actively wrong,
+not just a vague placeholder:
+- Win32: `INVALID_HANDLE_VALUE` (`CreateFileA`/`FindFirstFileA`),
+  `INVALID_FILE_ATTRIBUTES`/`INVALID_SET_FILE_POINTER`/`INVALID_FILE_SIZE`
+  (all `0xFFFFFFFF`, not `0`), `WAIT_FAILED` for
+  `WaitForSingleObject(Ex)` - a caller checking `== INVALID_HANDLE_VALUE`
+  while this returned `NULL` would never notice the failure.
+- `halo_ws_*`/`__WSAFDIsSet`: BSD/Winsock's `SOCKET_ERROR`/
+  `INVALID_SOCKET` is `-1`, not `0` - `0` from `halo_ws_socket` reads as
+  "here is valid file descriptor zero," not "failed."
+- `XNetStartup`/`XNetCleanup`/`XNetRegisterKey`/... still return success
+  (`0`) deliberately - "the network layer initialized" is a different,
+  coarser claim than "a socket call succeeded," and failing it outright
+  felt like a worse default than letting individual connections fail
+  later (which they will, since every `halo_ws_*` call does).
+
+`D3D__RenderState`/`D3D__TextureState`/`D3D__IndexData` (plain `extern`
+arrays the game's own `xdk_d3d8.h` inline functions read/write directly
+- no function call involved) and the three `XDEVICE_TYPE_*_TABLE`
+device descriptors are zero-initialized data definitions, not stubs.
+
+**Explicitly NOT reviewed for runtime correctness** - every `Create*`/
+`Lock*`-style D3D8 function still returns `0` (claims success) with its
+output pointer untouched, which the caller will then dereference. That
+is fine for *linking* (today's actual goal, deliberately stopping short
+of hardware testing - see the top of this doc) but will need a real
+pass - most likely real failure returns so the game's own error paths
+trigger - before anyone actually runs this on a console. Said plainly in
+`switch_d3d8_null.c`'s own header comment too, so it's not lost.
+
+### Milestone 8 - done: the entire game links, zero errors - a complete guest ELF
+
+Linked all 516 objects (478 game + `SWITCH_PLATFORM_FILES` +
+`port/switch/platform`'s null backend + `port/third_party/musl-math`)
+plus the full guest runtime (`guest_main.o`, `guest_imports.o`,
+`guest_syscall.o`, `guest_tp.o`, `guest_softfloat_stubs.o`,
+`guest_stdio_shim.o`, `guest_runtime_init.o`, `guest_platform_stubs.o`,
+`guest_pthread_stubs.o`, `guest_syscall_cp.o`) and `libc.a` against
+`guest.ld`. **Exit code 0. Zero undefined references, zero multiple
+definitions.** A real 16.5 MB ELF, entry point resolves to a real
+address, and the game's actual `main` (`source/main/main.c`) is linked
+in and present (not yet *called* - `guest_main.c`'s `__guest_entry` is
+still milestone 2's printf/malloc smoke test, not the real game
+bootstrap; wiring that up is the next, now well-scoped step).
+
+Getting the last handful of symbols needed two more real fixes, not
+stubs:
+
+- **`__syscall_cp`**: musl's `open`/`close`/`read`/`write` all call this
+  unconditionally (the "cancellable syscall" entry a `pthread_cancel` on
+  another thread can interrupt), not just when real cancellation is
+  possible - `build_musl.sh` never provided it at all. Since this guest
+  has no second thread to ever request a cancellation
+  (`guest_pthread_stubs.c`), "cancellable" and "ordinary" are the same
+  syscall here: `guest_syscall_cp.c` is a one-line pass-through to the
+  same `__guest_syscall` dispatcher every other syscall already uses -
+  their signatures already matched exactly.
+- **`__fdopen`/`fdopen`/`freopen`**: NOT actually missing features -
+  real bugs in how this environment preprocesses two vendored musl
+  files, found via `-E` and fixed at the source level (reproducible
+  patches in `build_musl.sh`, same category as its existing `__inline`
+  ones):
+  - `include/unistd.h`'s `long syscall(long, ...);` declaration and
+    `src/internal/syscall.h`'s `#define syscall(...) __syscall_ret(...)`
+    macro collide whenever both are visible in one TU (stdio_impl.h's
+    chain activates the macro before `freopen.c`'s own later
+    `#include <unistd.h>`): the preprocessor reads the *declaration* as
+    a *call*, taking `long` and `...` as its two macro arguments and
+    mangling the whole line into garbage (confirmed via `-E`:
+    `__syscall1(long,sizeof(1?(...):0ULL) < 8 ? ...)` - the literal
+    three dots, not expanded arguments). Fixed with the same whole-file
+    push_macro/pop_macro trick already used for `__inline` - scoped to
+    `syscall` this time, safe here since the declaration is `unistd.h`'s
+    only use of the name.
+  - `__fdopen.c`'s one real OS dependency, `<sys/ioctl.h>`'s
+    `TIOCGWINSZ` (checked once, to auto-enable line buffering for a
+    terminal), doesn't exist in this environment - but it's an optional
+    heuristic, not a correctness requirement. Deleted the include and
+    the one `if` that used it; every stream just defaults to fully
+    buffered (`f->lbf = EOF`, already the function's own fallback)
+    instead of line-buffered on a TTY.
+
+  Both fixes are applied twice in the repo: once as a reproducible
+  `build_musl.sh` patch (for a from-scratch extraction) and once by
+  hand directly against the already-extracted
+  `third_party/musl-1.2.5` tree (no network access this session to
+  redownload after a from-scratch wipe - the two must be kept in sync
+  if either changes again).
+
+Next: wire `guest_main.c`'s entry to call the game's real startup
+instead of the smoke test, then actually run this on hardware - at
+which point the Milestone 7 "not reviewed for correctness" stubs (file
+I/O failing outright, D3D8 Creates claiming success with garbage
+pointers) are exactly where to expect the first real crashes, in
+roughly that order.
+
 ## Unexplored
 
 - Whether Switch homebrew has an `mprotect`-equivalent for the desktop

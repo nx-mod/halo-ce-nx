@@ -85,6 +85,50 @@ for i in range(len(lines) - 1, -1, -1):
 open(path, "w").write("\n".join(lines))
 ' "$MUSL/$f"
 	done
+
+	# include/unistd.h's "long syscall(long, ...);" is a real declaration,
+	# but src/internal/syscall.h's own "#define syscall(...) ..." macro
+	# (active in any file that includes both, stdio_impl.h's chain first)
+	# makes the preprocessor read it as a call instead: "long" and "..."
+	# become the macro's two arguments, mangling the whole line into
+	# garbage (confirmed via -E: __fdopen.c and freopen.c both hit this -
+	# the actual reason build_musl.sh used to exclude them, not a deeper
+	# missing-feature gap). Same whole-file push_macro/pop_macro fix,
+	# scoped to "syscall" instead of "__inline" - safe here too: the
+	# declaration is unistd.h's only use of the name.
+	python3 -c '
+import sys
+path = sys.argv[1]
+lines = open(path).read().split("\n")
+for i, l in enumerate(lines):
+    if l.startswith("#define") and l.rstrip().endswith("_H"):
+        lines[i:i+1] = [l, "#pragma push_macro(\"syscall\")", "#undef syscall"]
+        break
+for i in range(len(lines) - 1, -1, -1):
+    if lines[i].strip():
+        lines[i:i] = ["#pragma pop_macro(\"syscall\")"]
+        break
+open(path, "w").write("\n".join(lines))
+' "$MUSL/include/unistd.h"
+
+	# __fdopen.c's TIOCGWINSZ check (line-buffer a terminal automatically)
+	# needs bits/ioctl.h, which this port doesn't have (same real-OS-
+	# subsystem gap as the DIRS exclusions above) - but it's an
+	# optional heuristic, not a correctness requirement: skipping it
+	# just means every stream defaults to fully buffered instead of line
+	# buffered on a TTY. Delete the #include and the "if" that uses it,
+	# leaving "f->lbf = EOF;" (already fully buffered) as the only effect.
+	python3 -c '
+import re, sys
+path = sys.argv[1]
+text = open(path).read()
+text = text.replace("#include <sys/ioctl.h>\n", "")
+text = text.replace("\tstruct winsize wsz;\n", "")
+text = re.sub(
+    r"\tif \(!\(f->flags & F_NOWR\) && !__syscall\(SYS_ioctl, fd, TIOCGWINSZ, &wsz\)\)\n\t\tf->lbf = .\\n.;\n",
+    "", text)
+open(path, "w").write(text)
+' "$MUSL/src/stdio/__fdopen.c"
 fi
 
 mkdir -p obj/include/bits "$OBJDIR"
@@ -110,7 +154,7 @@ EXCLUDE="dirent/alphasort.c dirent/closedir.c dirent/dirfd.c dirent/fdopendir.c 
 dirent/readdir.c dirent/readdir_r.c dirent/rewinddir.c dirent/scandir.c dirent/seekdir.c
 dirent/telldir.c dirent/versionsort.c env/__libc_start_main.c internal/emulate_wait4.c
 internal/vdso.c internal/version.c select/poll.c select/ppoll.c stat/statvfs.c
-stdio/__fdopen.c stdio/fopencookie.c stdio/freopen.c stdio/pclose.c stdio/__stdio_seek.c
+stdio/fopencookie.c stdio/pclose.c stdio/__stdio_seek.c
 stdio/__stdout_write.c time/__tz.c unistd/faccessat.c unistd/isatty.c unistd/nice.c
 unistd/tcgetpgrp.c unistd/tcsetpgrp.c conf/sysconf.c
 env/__init_tls.c env/__stack_chk.c env/__reset_tls.c malloc/mallocng thread/pthread_create.c
