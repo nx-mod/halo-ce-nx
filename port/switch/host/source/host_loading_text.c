@@ -345,6 +345,9 @@ void host_fps_draw(int width, int height)
 	static int s_samples, s_draws;
 	static unsigned long s_last_reported;
 	static u64 s_slowest_ticks;
+	/* frames the counter was drawn on since the last sample, to tell a
+	counter that is not drawn from one that is drawn and not seen */
+	static unsigned long s_frames_drawn;
 	u64 now = armGetSystemTick();
 	float elapsed;
 	unsigned long count = g_host_swap_count;
@@ -371,7 +374,10 @@ void host_fps_draw(int width, int height)
 	if (elapsed < 1.0f)
 	{
 		if (s_counter.vertex_count > 0)
+		{
 			draw_overlay(&s_counter, width, height);
+			s_frames_drawn++;
+		}
 		return;
 	}
 	if (!ensure_program())
@@ -404,8 +410,8 @@ void host_fps_draw(int width, int height)
 	if (s_samples < 12)
 	{
 		s_samples++;
-		logf_both("fps overlay: \"%s\" from %lu swaps over %.2fs, %d vertices\n", text,
-			count - s_last_reported, elapsed, s_counter.vertex_count);
+		logf_both("fps overlay: \"%s\" from %lu swaps over %.2fs, drawn on %lu of them, %d vertices\n", text,
+			count - s_last_reported, elapsed, s_frames_drawn + 1, s_counter.vertex_count);
 		s_last_reported = count;
 	}
 	/* 10 px inside the top or bottom edge */
@@ -419,6 +425,7 @@ void host_fps_draw(int width, int height)
 	if (!(++s_draws % 60) && s_samples >= 12)
 		logf_both("fps overlay: %d draws, %u swap calls, \"%s\"\n", s_draws, (unsigned)count, text);
 	draw_overlay(&s_counter, width, height);
+	s_frames_drawn = 0;
 }
 
 /* a blank console until the GL window takes over: the text is shown once,

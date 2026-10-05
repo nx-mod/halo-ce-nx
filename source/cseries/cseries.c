@@ -508,6 +508,15 @@ void *csmemcpy(
 	const void *source,
 	unsigned long size)
 {
+#ifdef HALO_SWITCH
+	if (!destination || !source)
+	{
+		/* (port) which caller: the assertion below names only itself */
+		void platform_log(const char *format, ...);
+
+		platform_log("csmemcpy(%p, %p, %lu) from %p", destination, source, size, __builtin_return_address(0));
+	}
+#endif
 	cseries_match_assert("c:\\halo\\SOURCE\\cseries\\cseries.c", 383, destination && source);
 	cseries_match_assert("c:\\halo\\SOURCE\\cseries\\cseries.c", 384, size>=0 && size<MAXIMUM_MEMCPY_MEMMOVE_SIZE);
 	cseries_match_assert("c:\\halo\\SOURCE\\cseries\\cseries.c", 385, (byte *)source+size<=(byte *)destination || (byte *)destination+size<=(byte *)source);

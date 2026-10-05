@@ -69,6 +69,8 @@ extern char __guest_heap_end[];
 #define ENOSYS 38
 
 static uintptr_t heap_cursor;
+/* the highest the cursor has been: memory above it is untouched */
+static uintptr_t heap_high_water;
 
 struct guest_iovec
 {
@@ -118,6 +120,22 @@ static long do_mmap(long long length)
 	}
 	uintptr_t result = heap_cursor;
 	heap_cursor += aligned;
+	/* anonymous mmap is zero-filled here too. Memory above the high-water
+	mark was never handed out and is still the loader's zeroes; below it,
+	the cursor may have come back down over freed memory (do_munmap of the
+	top region), and that was handed out again dirty - musl's calloc
+	trusts mmap'd chunks to be zero, so a calloc'd table came back full of
+	old pointers (render_interpolation.c's records: csmemcpy to NULL). */
+	if (!heap_high_water)
+		heap_high_water = (uintptr_t)__guest_heap_start;
+	if (result < heap_high_water)
+	{
+		uintptr_t dirty_end = heap_cursor < heap_high_water ? heap_cursor : heap_high_water;
+
+		__builtin_memset((void *)result, 0, dirty_end - result);
+	}
+	if (heap_cursor > heap_high_water)
+		heap_high_water = heap_cursor;
 	return (long)result;
 }
 
