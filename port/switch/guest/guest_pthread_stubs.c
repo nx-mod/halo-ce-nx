@@ -20,6 +20,7 @@ host_threads.c). build_musl.sh excludes musl's own pthread_create.
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 extern long host_create_thread(unsigned int guest_entry, unsigned int guest_arg, unsigned int stack_size,
@@ -48,7 +49,6 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	struct guest_pthread_start *context;
 	void *tls_block;
 
-	(void)attr;
 	{
 		extern void platform_log(const char *format, ...);
 
@@ -68,7 +68,10 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	/* musl's struct pthread begins with its self pointer (guest_tp.c) */
 	*(uintptr_t *)tls_block = (uintptr_t)tls_block;
 	if (!host_create_thread((unsigned int)(uintptr_t)guest_pthread_entry, (unsigned int)(uintptr_t)context,
-		GUEST_PTHREAD_STACK_SIZE, (unsigned int)(uintptr_t)tls_block))
+		/* the asked-for size: the threaded tick wants 16 MB, and the
+		default would overflow in its deepest recursions */
+		attr && attr->__u.__s[0] ? (unsigned int)((attr->__u.__s[0] + 0xfff) & ~0xfffUL) : GUEST_PTHREAD_STACK_SIZE,
+		(unsigned int)(uintptr_t)tls_block))
 	{
 		free(context);
 		free(tls_block);
@@ -79,10 +82,20 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	return 0;
 }
 
-int pthread_attr_init(pthread_attr_t *attr) { (void)attr; return 0; }
+/* the stack size lives in the attribute's first word, where musl keeps
+it (_a_stacksize); 0 means the default */
+int pthread_attr_init(pthread_attr_t *attr)
+{
+	memset(attr, 0, sizeof(*attr));
+	return 0;
+}
 int pthread_attr_destroy(pthread_attr_t *attr) { (void)attr; return 0; }
 int pthread_attr_setdetachstate(pthread_attr_t *attr, int state) { (void)attr; (void)state; return 0; }
-int pthread_attr_setstacksize(pthread_attr_t *attr, size_t size) { (void)attr; (void)size; return 0; }
+int pthread_attr_setstacksize(pthread_attr_t *attr, size_t size)
+{
+	attr->__u.__s[0] = size;
+	return 0;
+}
 
 int pthread_attr_getstack(const pthread_attr_t *attr, void **addr, size_t *size)
 {

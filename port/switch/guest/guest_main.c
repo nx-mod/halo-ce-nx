@@ -80,6 +80,9 @@ void __guest_entry(void)
 	it's just sat there as an unused extern symbol until now). Milestone
 	10's guest_text_demo() already proved the GL pipeline separately -
 	not called here too, to keep whatever happens next unambiguous. */
+	/* the game's tick on a thread (and core) of its own, overlapping the
+	frame's rendering, as on the Vita (port/linux/game/tick_thread.c) */
+	setenv("HALO_TICK_THREAD", "1", 1);
 	host_log("calling the game's real main() now");
 	extern int main(void);
 	main();
