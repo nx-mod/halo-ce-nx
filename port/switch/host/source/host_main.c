@@ -26,6 +26,9 @@ needs to execute.
 #include "host_loading_text.h"
 
 static FILE *g_log;
+/* off while the loading text is on the console: log lines would print
+under it. host.log still gets every line. */
+static int g_console_echo;
 
 /* not static - host_video.c logs eglSwapBuffers failures through this
 same path, so they land in host.log alongside everything else rather
@@ -33,9 +36,12 @@ than wherever stderr alone goes */
 void logf_both(const char *fmt, ...)
 {
 	va_list args;
-	va_start(args, fmt);
-	vfprintf(stderr, fmt, args);
-	va_end(args);
+	if (g_console_echo)
+	{
+		va_start(args, fmt);
+		vfprintf(stderr, fmt, args);
+		va_end(args);
+	}
 	if (g_log)
 	{
 		va_start(args, fmt);
@@ -63,7 +69,8 @@ static void host_write_impl(const char *data, long long length)
 		fflush(g_log);
 		fsdevCommitDevice("sdmc");
 	}
-	fwrite(data, 1, (size_t)length, stderr);
+	if (g_console_echo)
+		fwrite(data, 1, (size_t)length, stderr);
 }
 
 struct host_function
@@ -477,7 +484,8 @@ it has already succeeded once. Supports both of the shapes a player
 might have on their SD card: GAME_XISO_PATH alone (extracted here on
 first run) or GAME_DATA_DIR/maps already populated some other way
 (skipped here, used as-is) - PORTING.md's "unstub video" notes. */
-static void ensure_game_data_extracted(void)
+/* returns whether the extraction screen was shown */
+static int ensure_game_data_extracted(void)
 {
 	struct stat info;
 	char marker[256];
@@ -486,12 +494,12 @@ static void ensure_game_data_extracted(void)
 	if (stat(marker, &info) == 0)
 	{
 		logf_both("game data already extracted at %s/maps\n", GAME_DATA_DIR);
-		return;
+		return 0;
 	}
 	if (stat(GAME_XISO_PATH, &info) != 0)
 	{
 		logf_both("no xiso at %s and no extracted maps yet - game data unavailable\n", GAME_XISO_PATH);
-		return;
+		return 0;
 	}
 	{
 		char error[256] = {0};
@@ -510,6 +518,7 @@ static void ensure_game_data_extracted(void)
 			logf_both("extraction FAILED: %s\n", error);
 		}
 	}
+	return 1;
 }
 
 /* Every few seconds, how many frames the game has presented: a hang
@@ -551,17 +560,27 @@ int main(int argc, char *argv[])
 {
 	consoleInit(NULL);
 
+	host_loading_text_console();
+	/* the previous run's log survives one relaunch */
+	remove("sdmc:/switch/halo-ce-nx-guest-poc/host.prev.log");
+	rename("sdmc:/switch/halo-ce-nx-guest-poc/host.log", "sdmc:/switch/halo-ce-nx-guest-poc/host.prev.log");
 	g_log = fopen("sdmc:/switch/halo-ce-nx-guest-poc/host.log", "w");
 	logf_both("halo-ce-nx guest-poc host starting\n");
 
-	ensure_game_data_extracted();
-	host_loading_text_console();
+	if (ensure_game_data_extracted())
+		host_loading_text_console(); /* the extraction screen replaced it */
 	start_heartbeat();
 
-	if (load_and_run_guest("sdmc:/switch/halo-ce-nx-guest-poc/guest.elf") == 0)
-		logf_both("SUCCESS: the guest loaded, ran and called back into the host.\n");
-	else
-		logf_both("FAILED: see the lines above.\n");
+	{
+		int guest_result = load_and_run_guest("sdmc:/switch/halo-ce-nx-guest-poc/guest.elf");
+
+		/* the guest returned (or never started): failures belong on screen */
+		g_console_echo = 1;
+		if (guest_result == 0)
+			logf_both("SUCCESS: the guest loaded, ran and called back into the host.\n");
+		else
+			logf_both("FAILED: see the lines above.\n");
+	}
 
 	if (g_log)
 		fclose(g_log);

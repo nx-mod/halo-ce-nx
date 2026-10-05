@@ -218,12 +218,13 @@ void host_loading_text_draw(int width, int height)
 	if (stencil) glEnable(GL_STENCIL_TEST);
 }
 
-/* the same line on the text console, for the second or two before the
-game creates its GL window (row 30 of 45 is two thirds down) */
+/* a blank console until the GL window takes over: the text is shown once,
+by host_loading_text_draw, not also as console text first */
 void host_loading_text_console(void)
 {
-	const int length = (int)sizeof(LOADING_TEXT) - 1;
-
-	printf("\x1b[2J\x1b[30;%dH%s", (80 - length) / 2 + 1, LOADING_TEXT);
+	printf("\x1b[2J");
+	/* stdout is buffered: without the flush the screen kept whatever
+	stderr had already shown */
+	fflush(stdout);
 	consoleUpdate(NULL);
 }

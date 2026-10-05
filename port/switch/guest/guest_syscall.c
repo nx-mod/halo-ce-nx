@@ -51,6 +51,10 @@ extern char __guest_heap_end[];
 #define SYS_exit 93
 #define SYS_exit_group 94
 #define SYS_futex 98
+#define SYS_nanosleep 101
+#define SYS_clock_gettime 113
+#define SYS_clock_nanosleep 115
+#define SYS_gettimeofday 169
 
 #define ENOMEM 12
 #define ENOSYS 38
@@ -141,6 +145,42 @@ static long do_munmap(uintptr_t base, long long length)
 		free_region_count++;
 	}
 	return 0;
+}
+
+/* Time. Every clock is the same monotonic counter (CNTPCT_EL0, readable
+at EL0): no wall clock yet, and every caller found so far only measures
+intervals. With time_t and long both 32-bit here and no 64-bit time
+syscall, musl hands its own struct timespec/timeval straight through:
+two 32-bit words, seconds then nanoseconds/microseconds. */
+static unsigned long long now_ns(void)
+{
+	unsigned long long tick, frequency;
+
+	__asm__ __volatile__("mrs %0, cntpct_el0" : "=r" (tick));
+	__asm__("mrs %0, cntfrq_el0" : "=r" (frequency));
+	/* split, so tick * 1e9 cannot overflow */
+	return (tick / frequency) * 1000000000ULL + (tick % frequency) * 1000000000ULL / frequency;
+}
+
+extern long host_event_create(int auto_clear);
+extern long host_event_wait(long handle, long long timeout_ns);
+
+/* a real wait on a host event nothing ever signals */
+static void sleep_ns(long long ns)
+{
+	static long event;
+
+	if (ns <= 0)
+		return;
+	if (!event)
+		event = host_event_create(1);
+	if (event)
+		host_event_wait(event, ns);
+}
+
+static long long timespec_ns(const int32_t *ts)
+{
+	return (long long)ts[0] * 1000000000LL + ts[1];
 }
 
 long __guest_syscall(long long n, long long a, long long b, long long c, long long d, long long e, long long f)
@@ -251,6 +291,41 @@ long __guest_syscall(long long n, long long a, long long b, long long c, long lo
 		convenient shortcut. */
 		host_lseek((int)a, (long long)d, 0 /* SEEK_SET */);
 		return host_write_fd((int)a, (const void *)(uintptr_t)b, (unsigned long)c);
+	case SYS_clock_gettime:
+	{
+		/* d3d8_gl.c's vertical blank thread paces itself with this and
+		clock_nanosleep; both missing made it run untimed */
+		int32_t *ts = (int32_t *)(uintptr_t)b;
+		unsigned long long ns = now_ns();
+
+		ts[0] = (int32_t)(ns / 1000000000ULL);
+		ts[1] = (int32_t)(ns % 1000000000ULL);
+		return 0;
+	}
+	case SYS_gettimeofday:
+	{
+		int32_t *tv = (int32_t *)(uintptr_t)a;
+		unsigned long long ns = now_ns();
+
+		if (tv)
+		{
+			tv[0] = (int32_t)(ns / 1000000000ULL);
+			tv[1] = (int32_t)(ns % 1000000000ULL / 1000);
+		}
+		return 0;
+	}
+	case SYS_nanosleep:
+		sleep_ns(timespec_ns((const int32_t *)(uintptr_t)a));
+		return 0;
+	case SYS_clock_nanosleep:
+	{
+		long long ns = timespec_ns((const int32_t *)(uintptr_t)c);
+
+		if (b & 1) /* TIMER_ABSTIME */
+			ns -= (long long)now_ns();
+		sleep_ns(ns);
+		return 0;
+	}
 	case SYS_futex:
 		/* musl's __wait/__wake (malloc's lock under contention). No real
 		futex: a wait returns at once and __wait's caller re-checks the
