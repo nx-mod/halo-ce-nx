@@ -1,138 +1,42 @@
 /*
 SWITCH_WIN32_NULL.C
 
-The "headless boot" Win32 file/handle/thread/time/memory API: every
-entry point source/ calls directly (not through posix.h's boundary -
-those are real, needing a host-side bridge, see switch_posix_null.c).
-Failure returns use the real Win32 sentinel values where they differ
-from plain 0 (INVALID_HANDLE_VALUE, INVALID_FILE_ATTRIBUTES,
-INVALID_SET_FILE_POINTER, INVALID_FILE_SIZE, WAIT_FAILED) - getting
-these wrong is exactly the kind of bug a caller's `== 0` vs
-`== INVALID_HANDLE_VALUE` check would hide until a very confusing crash
-later. See switch_d3d8_null.c's header comment for the generation
-method and caveats; GetTickCount/QueryPerformanceCounter return 0 like
-vita_host_time_us (guest_platform_stubs.c) for the same reason - no
-host-synced clock import exists yet.
+The "headless boot" Win32 handle/thread/time/memory API: every entry
+point source/ calls directly (not through posix.h's boundary - those
+are real now too, see host_posix_files.c/host_posix_io.c). The file
+functions that used to be null-stubbed here (CreateFileA, ReadFile,
+WriteFile, ReadFileEx, WriteFileEx, CloseHandle, GetFileSize,
+GetFileTime, SetFileTime, SetFilePointer, SetEndOfFile, DeleteFileA,
+MoveFileA, CopyFileA, CreateDirectoryA, RemoveDirectoryA,
+FindFirstFileA, FindNextFileA, GetFileAttributesA,
+GetFileAttributesExA, SetFileAttributesA, GetDiskFreeSpaceExA) are real
+now too, in xbox_files.c (CloseHandle: switch_xbox_handles.c) -
+PORTING.md's "real file I/O" milestone. CreateThread/CreateEventA/
+SetEvent/ResetEvent/WaitForSingleObject(Ex) are also real now
+(switch_xbox_threads.c, host_threads.c) - PORTING.md's "real
+threading" milestone, needed because source/cache/cache_files_
+windows.c's cache-file worker thread genuinely depends on both
+actually working, unlike every other CreateThread/CreateEventA call
+site (input_xbox.c, cache_files_decompress_windows.c, bungie_net's
+thread_win32.c), none of which check the result at all.
+CreateMutexA/ReleaseMutex stay null-stubbed - only bungie_net
+(networking, not yet in scope) uses them. Failure returns use the
+real Win32 sentinel values where they differ from plain 0
+(INVALID_HANDLE_VALUE, INVALID_SET_FILE_POINTER, WAIT_FAILED) for what's
+still null-stubbed here - getting these wrong is exactly the kind of
+bug a caller's `== 0` vs `== INVALID_HANDLE_VALUE` check would hide
+until a very confusing crash later. See switch_d3d8_null.c's header
+comment for the generation method and caveats. GetTickCount/
+QueryPerformanceCounter/QueryPerformanceFrequency are real now too
+(AArch64's own system counter register, see below) -
+vita_host_time_us (guest_platform_stubs.c) still isn't; that one needs
+a real host-synced wall-clock import this doesn't provide, not just a
+free-running counter.
 */
 
 #include "platform.h"
 
-void *__stdcall CreateFileA(const char *, unsigned long, unsigned long, void *, unsigned long, unsigned long, void *)
-{
-	return (void *)(long)-1;
-}
-
-int __stdcall ReadFile(void *, void *, unsigned long, unsigned long *, struct _OVERLAPPED *)
-{
-	return 0;
-}
-
-int __stdcall WriteFile(void *, const void *, unsigned long, unsigned long *, struct _OVERLAPPED *)
-{
-	return 0;
-}
-
-int __stdcall ReadFileEx(void *, void *, unsigned long, struct _OVERLAPPED *, void (__stdcall *)(unsigned long, unsigned long, struct _OVERLAPPED *))
-{
-	return 0;
-}
-
-int __stdcall WriteFileEx(void *, const void *, unsigned long, struct _OVERLAPPED *, void (__stdcall *)(unsigned long, unsigned long, struct _OVERLAPPED *))
-{
-	return 0;
-}
-
-int __stdcall CloseHandle(void *)
-{
-	return 0;
-}
-
-unsigned long __stdcall GetFileSize(void *, unsigned long *)
-{
-	return 0xFFFFFFFF;
-}
-
-int __stdcall GetFileTime(void *, struct _FILETIME *, struct _FILETIME *, struct _FILETIME *)
-{
-	return 0;
-}
-
-int __stdcall SetFileTime(void *, const struct _FILETIME *, const struct _FILETIME *, const struct _FILETIME *)
-{
-	return 0;
-}
-
-unsigned long __stdcall SetFilePointer(void *, long, long *, unsigned long)
-{
-	return 0xFFFFFFFF;
-}
-
-int __stdcall SetEndOfFile(void *)
-{
-	return 0;
-}
-
-int __stdcall DeleteFileA(const char *)
-{
-	return 0;
-}
-
-int __stdcall MoveFileA(const char *, const char *)
-{
-	return 0;
-}
-
-int __stdcall CopyFileA(const char *, const char *, int)
-{
-	return 0;
-}
-
-int __stdcall CreateDirectoryA(const char *, void *)
-{
-	return 0;
-}
-
-int __stdcall RemoveDirectoryA(const char *)
-{
-	return 0;
-}
-
-void *__stdcall FindFirstFileA(const char *, struct _WIN32_FIND_DATAA *)
-{
-	return (void *)(long)-1;
-}
-
-int __stdcall FindNextFileA(void *, struct _WIN32_FIND_DATAA *)
-{
-	return 0;
-}
-
-unsigned long __stdcall GetFileAttributesA(const char *)
-{
-	return 0xFFFFFFFF;
-}
-
-int __stdcall GetFileAttributesExA(const char *, enum _GET_FILEEX_INFO_LEVELS, void *)
-{
-	return 0;
-}
-
-int __stdcall SetFileAttributesA(const char *, unsigned long)
-{
-	return 0;
-}
-
-int __stdcall GetDiskFreeSpaceExA(const char *, union _ULARGE_INTEGER *, union _ULARGE_INTEGER *, union _ULARGE_INTEGER *)
-{
-	return 0;
-}
-
 long __stdcall CompareFileTime(const struct _FILETIME *, const struct _FILETIME *)
-{
-	return 0;
-}
-
-void *__stdcall CreateThread(void *, unsigned long, unsigned long (__stdcall *)(void *), void *, unsigned long, unsigned long *)
 {
 	return 0;
 }
@@ -157,31 +61,6 @@ int __stdcall SwitchToThread(void)
 	return 0;
 }
 
-void __stdcall Sleep(unsigned long)
-{
-	
-}
-
-unsigned long __stdcall SleepEx(unsigned long, int)
-{
-	return 0;
-}
-
-void *__stdcall CreateEventA(void *, int, int, const char *)
-{
-	return 0;
-}
-
-int __stdcall SetEvent(void *)
-{
-	return 0;
-}
-
-int __stdcall ResetEvent(void *)
-{
-	return 0;
-}
-
 void *__stdcall CreateMutexA(void *, int, const char *)
 {
 	return 0;
@@ -192,64 +71,122 @@ int __stdcall ReleaseMutex(void *)
 	return 0;
 }
 
-unsigned long __stdcall WaitForSingleObject(void *, unsigned long)
-{
-	return 0xFFFFFFFF;
-}
-
-unsigned long __stdcall WaitForSingleObjectEx(void *, unsigned long, int)
-{
-	return 0xFFFFFFFF;
-}
+/* real now (not a null stub): guest_xbox_handles.c's
+platform_set_last_error_from_errno (PORTING.md's "real file I/O"
+milestone) needs callers to actually be able to read back what it
+set - xbox_files.c's own CreateFileA etc depend on that, not just on
+the open/read/etc call's own return value. No real threading here
+(guest_pthread_stubs.c), so a single guest-wide variable is exactly as
+correct as the real thing's __thread storage would be. */
+static unsigned long switch_last_error;
 
 unsigned long __stdcall GetLastError(void)
 {
-	return 0;
+	return switch_last_error;
 }
 
-void __stdcall SetLastError(unsigned long)
+void __stdcall SetLastError(unsigned long error)
 {
-	
+	switch_last_error = error;
+}
+
+/* real now (not null stubs): AArch64's own CNTPCT_EL0/CNTFRQ_EL0
+system counter - the same registers libnx's own armGetSystemTick/
+armGetSystemTickFreq (arm/counter.h) read, an ordinary EL0 (so,
+guest-code-legal with no host import at all) register read, not a
+privileged one. The previous "return 0 without ever touching the
+output" null stubs were a real, if latent, crash risk beyond just
+"the game runs with no timing": source/cseries/profile.c's own
+profile_initialize reads QueryPerformanceFrequency's OUTPUT
+unconditionally right after calling it (PORTING.md), with no check on
+the call's own return value - divides by whatever garbage was already
+on the stack where `frequency.QuadPart` lived, including a genuine
+chance of a divide-by-zero crash if that happened to be zero. */
+static inline unsigned long long switch_system_tick(void)
+{
+	unsigned long long value;
+
+	__asm__ __volatile__("mrs %0, cntpct_el0" : "=r" (value));
+	return value;
+}
+
+static inline unsigned long long switch_system_tick_frequency(void)
+{
+	unsigned long long value;
+
+	__asm__("mrs %0, cntfrq_el0" : "=r" (value));
+	return value;
 }
 
 unsigned long __stdcall GetTickCount(void)
 {
-	return 0;
+	unsigned long long frequency = switch_system_tick_frequency();
+
+	return frequency ? (unsigned long)(switch_system_tick() * 1000ULL / frequency) : 0;
 }
 
-int __stdcall QueryPerformanceCounter(union _LARGE_INTEGER *)
+int __stdcall QueryPerformanceCounter(union _LARGE_INTEGER *counter)
 {
-	return 0;
+	if (counter)
+		counter->QuadPart = (__int64)switch_system_tick();
+	return 1;
 }
 
-int __stdcall QueryPerformanceFrequency(union _LARGE_INTEGER *)
+int __stdcall QueryPerformanceFrequency(union _LARGE_INTEGER *frequency)
 {
-	return 0;
+	if (frequency)
+		frequency->QuadPart = (__int64)switch_system_tick_frequency();
+	return 1;
 }
 
-void *__stdcall GlobalAlloc(unsigned int, unsigned long)
+/* real now (not null stubs): source/cseries/cseries_windows.c's
+system_malloc/system_realloc/system_free - and so every single plain
+`malloc`/`realloc`/`free` the game's own code makes, since cseries.h's
+`#define malloc(size) match_malloc(__FILE__, __LINE__, size)` routes
+every one of them through here - called GlobalAlloc(0, size) and got
+NULL back unconditionally, every time, with no exception. The game's
+first plain `malloc` call (cache_files_initialize's cache_file_globals.
+requests, PORTING.md's milestone 11) is where this first got hit hard
+enough to fail a match_assert and halt, but every earlier allocation
+through this path (there weren't many - most early allocations are
+game_state_malloc/XPhysicalAlloc, a separate, already-real pool) was
+silently buggy the same way until now. Backed by this guest's own
+musl heap (guest_syscall.c's mmap bump allocator) - the same real
+allocator a plain game-side `malloc` already proved out early
+(guest_main.c's own smoke test). */
+#include <stdlib.h>
+#include <string.h>
+
+void *__stdcall GlobalAlloc(unsigned int flags, unsigned long size)
 {
-	return 0;
+	void *memory = malloc(size);
+
+	if (memory && (flags & 0x0040 /* GMEM_ZEROINIT */))
+		memset(memory, 0, size);
+	return memory;
 }
 
-void *__stdcall GlobalReAlloc(void *, unsigned long, unsigned int)
+void *__stdcall GlobalReAlloc(void *memory, unsigned long size, unsigned int)
 {
-	return 0;
+	return realloc(memory, size);
 }
 
 void __stdcall GlobalMemoryStatus(struct _MEMORYSTATUS *)
 {
-	
+
 }
 
-void *__stdcall LocalFree(void *)
+void *__stdcall LocalFree(void *memory)
 {
+	free(memory);
 	return 0;
 }
 
-unsigned long __stdcall LocalSize(void *)
+unsigned long __stdcall LocalSize(void *memory)
 {
-	return 0;
+	extern unsigned long malloc_usable_size(void *);
+
+	return memory ? (unsigned long)malloc_usable_size(memory) : 0;
 }
 
 void __stdcall OutputDebugStringA(const char *)

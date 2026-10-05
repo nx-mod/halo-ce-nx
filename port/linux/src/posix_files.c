@@ -13,6 +13,9 @@ the host ABI and _FILE_OFFSET_BITS=64.
 #include <sys/statvfs.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef __SWITCH__
+#include <utime.h> /* posix_set_file_times: no real utimensat() here, see below */
+#endif
 
 #include "posix.h"
 
@@ -73,6 +76,23 @@ int posix_set_file_times(const char *path,
 	posix_ulong access_seconds, posix_ulong access_nanoseconds,
 	posix_ulong modification_seconds, posix_ulong modification_nanoseconds)
 {
+#ifdef __SWITCH__
+	/* devkitA64's newlib declares utimensat() (sys/stat.h) but doesn't
+	actually implement/export it for this (libnx) target - undefined
+	reference at link time. utime() (whole-second resolution only, no
+	UTIME_OMIT "leave alone" sentinel - a zero input second here already
+	meant "leave it", so this just skips the call entirely instead) is
+	in libsysbase.a for real. */
+	struct utimbuf times;
+
+	(void)access_nanoseconds;
+	(void)modification_nanoseconds;
+	if (!access_seconds && !modification_seconds)
+		return 0;
+	times.actime = access_seconds ? (time_t)access_seconds : (time_t)modification_seconds;
+	times.modtime = modification_seconds ? (time_t)modification_seconds : (time_t)access_seconds;
+	return utime(path, &times);
+#else
 	struct timespec times[2];
 
 	times[0].tv_sec = (time_t)access_seconds;
@@ -80,6 +100,7 @@ int posix_set_file_times(const char *path,
 	times[1].tv_sec = (time_t)modification_seconds;
 	times[1].tv_nsec = modification_seconds ? (long)modification_nanoseconds : UTIME_OMIT;
 	return utimensat(AT_FDCWD, path, times, 0);
+#endif
 }
 
 int posix_seek(int descriptor, posix_long offset_low, posix_long offset_high, int whence,

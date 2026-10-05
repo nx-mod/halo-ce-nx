@@ -123,6 +123,10 @@ closing it per line takes milliseconds on Windows, and a host logs
 thousands of lines when a hundred machines join, load or leave. The file is
 opened once even if threads log their first lines at once, and each line is
 one write, so lines from several threads do not interleave. */
+#ifdef HALO_SWITCH
+extern void platform_log(const char *format, ...);
+#endif
+
 static void write_to_debug_file(
 	char const *string,
 	boolean date)
@@ -137,6 +141,15 @@ static void write_to_debug_file(
 
 		if (!opened)
 		{
+#ifdef HALO_SWITCH
+			/* switch_posix_null.c's fopen has no real file I/O yet
+			(PORTING.md milestone 7) - every error()/rasterizer_error()
+			call was silently vanishing into this fopen failure instead
+			of reaching host.log, with no visible symptom at all (not
+			even a dropped-message notice). platform_log at least gets
+			it to host.log until real file I/O exists. */
+			platform_log("%s", string);
+#endif
 			return;
 		}
 		file = __sync_val_compare_and_swap(&debug_file, (FILE *)NULL, opened);

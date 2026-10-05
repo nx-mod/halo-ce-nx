@@ -1120,10 +1120,28 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 		}
 		viewport_update_constants();
 
-		if (!config_boolean("debug.null_renderer") && platform_video_initialize(width, height))
-			gl_initialize();
-		else
-			platform_log("Direct3D: running without a window (nothing is displayed)");
+		{
+			BOOL have_window = !config_boolean("debug.null_renderer") && platform_video_initialize(width, height);
+#ifdef HALO_SWITCH
+			/* Linux/Android share sdl_platform.c's platform_video_initialize,
+			which calls gl_functions_load() itself right after
+			SDL_GL_MakeCurrent (same function, guest-side both times).
+			Switch's platform_video_initialize is a HOST function
+			(port/switch/host/source/host_video.c) - gl_functions_load()
+			populates gl.h's guest-side halo_gl* pointers via
+			guest_gl_get_proc_address, which only exists guest-side, so the
+			host can't call it. Has to happen here instead, once the host
+			confirms the context is current. Without this every halo_gl*
+			pointer stayed NULL and gl_initialize()'s first glGetIntegerv
+			call crashed on hardware: Instruction Abort at address 0. */
+			if (have_window && !gl_functions_load())
+				have_window = FALSE;
+#endif
+			if (have_window)
+				gl_initialize();
+			else
+				platform_log("Direct3D: running without a window (nothing is displayed)");
+		}
 		device.created = TRUE;
 	}
 	*returned_device = device_pointer();

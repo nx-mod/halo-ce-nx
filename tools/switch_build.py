@@ -95,6 +95,23 @@ SWITCH_GAME_FLAGS = [f for f in GAME_FLAGS if f != "-Wno-error=incompatible-func
 SWITCH_PLATFORM_FILES = [
     "halo_linker_common.c", "msvc_crt.c", "msvc_wide.c", "bink_null.c",
     "tag_relocate.c", "frame_timing.c",
+    # the Win32-file-API-over-POSIX layer (CreateFileA/ReadFile/...,
+    # platform_translate_path, platform_data_root/save_root) - no SDL,
+    # no Android/Linux-specific code at all, straight POSIX open/read/
+    # write/close/stat/opendir calls only. Needs real posix_* host
+    # imports (host_posix_files.c) and real open/read/write/close/lseek
+    # guest syscalls (guest_syscall.c) - PORTING.md's "real file I/O"
+    # milestone.
+    "xbox_files.c",
+    # the real DirectSound mixer (ADPCM decode, resampling, 3D rolloff/
+    # panning) - reused exactly as proven on Linux/Vita; only its own
+    # HALO_SWITCH branches replace the SDL-based "feed PCM to the
+    # speaker" bottom layer with libnx audout (host_audio.c) fed from a
+    # dedicated real guest thread (switch_xbox_threads.c's CreateThread).
+    # Needs real pthread_mutex_t (guest_pthread_stubs.c) now too, for
+    # its own mixer_lock/parameter_lock between the tick and audio
+    # threads - PORTING.md's "wire in audio/controls" milestone.
+    "dsound_sdl.c",
 ]
 
 # The real D3D8 device: Linux's own GLES3-over-OpenGL-4.5 renderer, whose

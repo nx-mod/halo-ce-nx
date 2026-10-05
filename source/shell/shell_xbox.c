@@ -112,11 +112,30 @@ int main(
 
 	__try
 	{
+#ifdef HALO_SWITCH
+		/* diagnostic: PORTING.md - the guest cleanly calls exit() right
+		after one presented frame, with no error()/rasterizer_error()
+		ever firing (confirmed: errors.c's write_to_debug_file's new
+		platform_log fallback never printed anything either run). Either
+		shell_initialize() itself returns FALSE here, or main_loop()
+		returns almost immediately - this narrows down which. */
+		extern void platform_log(const char *format, ...);
+		boolean shell_ready = shell_initialize();
+
+		platform_log("shell_initialize() returned %d", (int)shell_ready);
+		if (shell_ready)
+		{
+			main_loop();
+			platform_log("main_loop() returned (not expected during normal play)");
+			shell_dispose();
+		}
+#else
 		if (shell_initialize())
 		{
 			main_loop();
 			shell_dispose();
 		}
+#endif
 	}
 	__except (generic_exception_filter(GetExceptionCode(), GetExceptionInformation()))
 	{

@@ -34,7 +34,9 @@ skips opening a device (port_config.c).
 #include "sdl_platform.h"
 #include "port_config.h"
 
+#ifndef HALO_SWITCH
 #include <SDL3/SDL.h>
+#endif
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -641,10 +643,55 @@ static void mix(float *output, unsigned long frames)
 
 /* ---------- output */
 
+#ifndef HALO_SWITCH
 static SDL_AudioStream *audio_stream;
+#endif
 static BOOL audio_started = FALSE;
 static BOOL frame_locked_mixing = FALSE;
 
+#ifdef HALO_SWITCH
+/* real audio output (PORTING.md's "wire in audio/controls" milestone):
+the mixer above is reused exactly as proven on Linux/Vita - only this
+bottom "feed PCM to the speaker" layer is native (libnx audout,
+host_audio.c) instead of going through SDL, which Switch has none of.
+A dedicated real guest thread (switch_xbox_threads.c's CreateThread,
+PORTING.md's "real threading" milestone) pulls from the mixer in a
+plain loop; host_audio_write's own blocking-until-a-buffer-is-free is
+this thread's entire pacing, same role SDL's pull callback or the
+clock thread's own sleep played on the other platforms. */
+extern int host_audio_open(void);
+extern void host_audio_write(const short *pcm);
+extern int host_audio_frames_per_buffer(void);
+
+static unsigned long __stdcall switch_audio_thread(void *parameter)
+{
+	int frames = host_audio_frames_per_buffer();
+	float *mix_buffer = malloc((unsigned long)frames * OUTPUT_CHANNELS * sizeof(float));
+	short *pcm_buffer = malloc((unsigned long)frames * OUTPUT_CHANNELS * sizeof(short));
+
+	(void)parameter;
+	if (!mix_buffer || !pcm_buffer)
+	{
+		free(mix_buffer);
+		free(pcm_buffer);
+		return 0;
+	}
+	for (;;)
+	{
+		int i;
+
+		mix(mix_buffer, (unsigned long)frames);
+		for (i = 0; i < frames * OUTPUT_CHANNELS; i++)
+		{
+			float sample = mix_buffer[i] * 32767.0f;
+
+			pcm_buffer[i] = (short)(sample > 32767.0f ? 32767.0f : sample < -32768.0f ? -32768.0f : sample);
+		}
+		host_audio_write(pcm_buffer);
+	}
+	return 0;
+}
+#else
 void vita_host_pin_current_thread(int core) __attribute__((weak));
 
 static void SDLCALL audio_callback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount)
@@ -707,10 +754,13 @@ static void *silent_clock_thread(void *parameter)
 	}
 	return NULL;
 }
+#endif
 
 static void audio_start(void)
 {
+#ifndef HALO_SWITCH
 	SDL_AudioSpec spec;
+#endif
 
 	if (audio_started)
 		return;
@@ -731,6 +781,26 @@ static void audio_start(void)
 			return;
 		}
 	}
+#ifdef HALO_SWITCH
+	if (config_boolean("audio.enabled") && host_audio_open())
+	{
+		/* CreateThread/switch_xbox_threads.c is real now (PORTING.md's
+		"real threading" milestone) - this is exactly its second real
+		caller, after the cache-file worker */
+		if (CreateThread(NULL, 0x8000, switch_audio_thread, NULL, 0, NULL))
+			return;
+		platform_log("couldn't start the audio mixer thread; sound is silent");
+	}
+	else
+	{
+		platform_log("cannot open an audio device; sound is silent");
+	}
+	/* no clock-thread fallback here: real Switch hardware always has
+	real audio output, so this path (device open failed) isn't expected
+	to be reached in practice - unlike Linux/Vita, where "no device"
+	(a misconfigured desktop, audio.enabled=false) is a real, common
+	case the clock thread exists for */
+#else
 	if (config_boolean("audio.enabled") && platform_sdl_initialize())
 	{
 		spec.format = SDL_AUDIO_F32;
@@ -751,6 +821,7 @@ static void audio_start(void)
 		pthread_create(&thread, NULL, silent_clock_thread, NULL);
 		pthread_detach(thread);
 	}
+#endif
 }
 
 /* ---------- completion */

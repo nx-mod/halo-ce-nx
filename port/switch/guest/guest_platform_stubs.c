@@ -7,12 +7,11 @@ without crashing while there's no real backend. Each one is a deliberate
 placeholder for the "headless boot" milestone (PORTING.md): get the game
 ticking before there's real file I/O, config, or input.
 
-Not here: posix_stat/posix_fstat/posix_make_directory/posix_truncate
-(port/linux/src/posix.h) - same category as D3D8/DirectSound/XInput,
-genuinely needs a real host-side implementation (posix.h's own comment:
-Android compiles posix_*.c straight into its 64-bit host and calls it
-from the ILP32 guest - the same shape we'd need here, with new
-host_* imports). Left undefined on purpose until that exists.
+Not here: platform_translate_path (port/linux/src/xbox_files.c defines
+it for real now, part of SWITCH_PLATFORM_FILES - the file I/O milestone,
+PORTING.md) and every posix_* function (port/linux/src/posix.h) - those
+are real host imports now too (port/switch/host/source/host_posix_files.c,
+host_posix_io.c), not guest-local stubs.
 */
 
 #include <stdarg.h>
@@ -38,20 +37,18 @@ void platform_show_message(const char *title, const char *message)
 	platform_log("%s: %s", title ? title : "", message ? message : "");
 }
 
-/* identity mapping for now - no real Xbox-path -> SD-card-path scheme yet
-(there's no real file I/O to target regardless, see the file comment) */
-void platform_translate_path(const char *xbox_path, char *host_path, unsigned long host_path_size)
-{
-	if (host_path_size == 0)
-		return;
-	strncpy(host_path, xbox_path ? xbox_path : "", host_path_size - 1);
-	host_path[host_path_size - 1] = '\0';
-}
-
 /* port/linux/src/port_config.c's cvar system, not ported yet - every
-setting reports its "off"/zero default rather than reading real config. */
+setting reports its "off"/zero default rather than reading real config,
+with the deliberate exceptions below. */
 int config_boolean(const char *name)
 {
+	/* dsound_sdl.c's audio_start checks this before even trying
+	host_audio_open - real audio should just work by default on a real
+	console with real speakers, not stay silent until some config
+	system that doesn't exist yet turns it on (PORTING.md's "wire in
+	audio/controls" milestone) */
+	if (!strcmp(name, "audio.enabled"))
+		return 1;
 	(void)name;
 	return 0;
 }
@@ -64,6 +61,13 @@ double config_real(const char *name)
 
 const char *config_string(const char *name)
 {
+	/* xbox_files.c's platform_data_root() checks this first, before any
+	of its desktop-only auto-detection (readlink /proc/self/exe, cwd
+	has-maps probing - meaningless on Switch); answering here skips all
+	of that and points it straight at the game data this host's own
+	xiso extraction (host_main.c's GAME_DATA_DIR) already populates. */
+	if (!strcmp(name, "paths.data"))
+		return "sdmc:/haloce-nx";
 	(void)name;
 	return "";
 }
@@ -107,14 +111,29 @@ config_boolean/real/string/integer above never report a change, so
 this never needs to move either. */
 volatile unsigned long halo_settings_generation;
 
-/* real host-synced high-res timing isn't wired up yet (no host_* import
-for it) - a monotonically-meaningless 0 until then. Every caller treats
-this as "time since some epoch", so returning a constant just means
-"no time has passed", not a crash - fine for a build that doesn't render
-or tick gameplay against real deltas yet either. */
+/* real now (not a constant 0): AArch64's own CNTPCT_EL0/CNTFRQ_EL0
+system counter, the same ordinary EL0 (no host import needed) register
+pair switch_win32_null.c's QueryPerformanceCounter/Frequency use -
+every caller here only ever subtracts two of these (elapsed time, not
+wall-clock date), so a monotonic-since-boot counter is exactly as
+correct an answer as a real epoch-relative clock would be for any of
+them (profiling - source/game/game.c, source/objects/objects.c,
+source/render/*; a cache lock's 3-second stall warning -
+source/memory/lruv_cache.c). Every microsecond-conversion division
+below is safe without a zero-frequency guard: CNTFRQ_EL0 is a fixed,
+real hardware constant on this CPU, never actually zero. */
 unsigned long long vita_host_time_us(void)
 {
-	return 0;
+	unsigned long long tick, frequency;
+
+	__asm__ __volatile__("mrs %0, cntpct_el0" : "=r" (tick));
+	__asm__("mrs %0, cntfrq_el0" : "=r" (frequency));
+	/* one division, by the real (always nonzero) hardware frequency
+	directly - not by a scaled-down intermediate that a frequency
+	under 1 MHz (not a real possibility on this hardware, but not
+	worth assuming either) could turn into a zero divisor. tick*1e6
+	only overflows 64 bits past ~11 continuous days of uptime. */
+	return frequency ? (tick * 1000000ULL) / frequency : 0;
 }
 
 /* xinput_sdl.c's test-input debug hook (SDL path, unused on Switch -

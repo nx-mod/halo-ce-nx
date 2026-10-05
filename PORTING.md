@@ -826,6 +826,469 @@ stubs (D3D8 Creates claiming success with garbage pointers, all file
 I/O failing outright) are exactly where to expect the first real
 rendering-side crashes once actual game code starts calling into them.
 
+### Milestone 11 - in progress: the real game entry, and everything between it and the first real file read
+
+`guest_main.c`'s entry now calls `source/shell/shell_xbox.c`'s real
+`main()` (not Milestone 2/10's smoke test, which still exists as
+`guest_text_demo.c` but is no longer called) - `fuck_code_in_the_eye()`
+(the anti-tamper walk), `rasterizer_preinitialize__fill_you_up_with_the_devils_cock()`
+(a throwaway D3D8 device create + one `Present`, confirmed rendering a
+real frame), `physical_memory_allocate()`, then `shell_initialize()` ->
+`main_loop()`. Five real, hardware-found bugs stood between "links and
+boots" and the game actually trying to read its own data, each
+confirmed by hardware evidence (a crash report, a log line that never
+printed, or both) rather than guessed at from source alone:
+
+- **`svcMapMemory` for the guest's data segment intermittently failed
+  with `rc=0xd401` (`InvalidCurrentMemory`)**, both before and after a
+  since-reverted attempt to shrink `PLATFORM_CONTIGUOUS_SIZE` from
+  Vita's shared 112 MB to 64 MB (reasoned from a wrong read of
+  `GAME_STATE_SIZE` - see below). Root cause not fully pinned down;
+  reverting to 112 MB did not obviously change the failure rate either
+  way. Still open as an intermittent condition - retrying the launch
+  (occasionally a full reboot) has cleared it every time so far.
+- **musl's own `vfprintf` promotes every plain `%f`/`%e`/`%g` `double`
+  argument to a real 128-bit IEEE quad `long double` before
+  formatting it** - an implementation detail of its float-to-decimal
+  algorithm, not anything the game's own code asked for (its MSVC
+  heritage means the game itself never constructs a real `long
+  double`). AArch64 has no hardware quad FP, so every op on one is a
+  `libgcc`/compiler-rt softfloat call this guest never linked - hence
+  `guest_softfloat_stubs.c`'s deliberate traps firing on an ordinary
+  `printf("%.0f", ...)` call, not on any real long-double value.
+  Real libgcc quad routines exist for this toolchain but turned out to
+  be unusable: devkitA64 has no ILP32 multilib, so its real LP64
+  `libgcc.a` objects are plain ELF64 and the linker refuses to mix
+  them with this ILP32 ELF32 link. Fixed at the actual source instead:
+  `vfprintf.c` now has a second, textually-identical copy of `fmt_fp`
+  (`fmt_fp_dbl`) that runs the exact same algorithm in `double`
+  throughout (`LDBL_*` -> `DBL_*`, `frexpl` -> `frexp`), and a new
+  `union arg` member (`fd`) keeps an ordinary `%f`/`%e`/`%g` argument a
+  plain `double` end to end instead of ever widening it - lossless,
+  since a `double` always represents itself exactly. A genuine `%Lf`
+  still goes through the real, quad, trapping path, on the unchanged
+  assumption the game never emits one; other musl internals
+  (`strtod`, `vfscanf`, `frexpl`, `scalbnl`, `fmodl`) do use real quad
+  arithmetic and still need the trap stubs linked in for those.
+- **A `NULL`-function-pointer crash (`Instruction Abort` at address
+  `0`)** in `gl_initialize()`'s first real GL call
+  (`glGetIntegerv(GL_MAJOR_VERSION, ...)`), confirmed via Atmosphère's
+  own crash report (`/atmosphere/crash_reports/`) and resolved back to
+  source with `nm`/`objdump` against the exact deployed `guest.elf`.
+  `gl.h`'s macros redirect `glGetIntegerv` and friends to `halo_gl*`
+  function-pointer globals, populated once by `gl_functions_load()`
+  (`gl_functions.c`) - which Linux/Android's shared `sdl_platform.c`
+  calls itself, right after `SDL_GL_MakeCurrent`, inside its own
+  `platform_video_initialize`. Switch's `platform_video_initialize` is
+  a *host* function (`host_video.c`) - `gl_functions_load` is
+  guest-only code (it calls `guest_gl_get_proc_address`, which only
+  exists guest-side), so the host can't call it; nothing else called
+  it either. Fixed by calling it explicitly from `Direct3D_CreateDevice`
+  (`d3d8_gl.c`, `#ifdef HALO_SWITCH`), right after the host confirms
+  the context is current.
+- **Every `error()`/`rasterizer_error()`/`match_assert()` failure
+  message was being silently discarded**, with no symptom at all (not
+  even a dropped-message notice) - confirmed by physical_memory_allocate's
+  own post-allocation `platform_log` never printing once across 7
+  separate hardware test runs, despite no crash. `write_to_debug_file`
+  (`errors.c`) writes to `d:\debug.txt` via `fopen`, which is
+  null-stubbed on Switch (no real file I/O yet, see below) and fails
+  every time; the function has always silently `return`ed on that
+  failure, on every platform, with no visible fallback. Added a
+  `platform_log` fallback for `HALO_SWITCH` specifically when the
+  `fopen` fails, surfacing every subsequent `error()`/`match_assert`
+  message to `host.log` - which is what then made the next bug visible
+  at all.
+- **`source/cache/physical_memory_map.c`'s `GAME_STATE_SIZE` is
+  `HALO_PORT_GAME_STATE_SIZE` (16.75 MB) under `HALO_LINUX` (which
+  Switch is), not the Xbox's own `0x345000` (~3.3 MB)** used in the
+  `#else` branch - misread as the latter when reasoning about the
+  (since-reverted) `PLATFORM_CONTIGUOUS_SIZE` shrink above. Real total
+  (`GAME_STATE_SIZE` + `TAG_CACHE_SIZE` + `TEXTURE_CACHE_SIZE` +
+  `SOUND_CACHE_SIZE`) is ~64.75 MB - already bigger than the 64 MB
+  arena that mistake produced, before even counting the D3D8 back/
+  depth buffers allocated earlier - so `physical_memory_allocate`'s
+  `match_assert` on `XPhysicalAlloc` was failing on every single
+  hardware run, confirmed the same way as the bug above (its own log
+  line never printed). Fixed by reverting to Vita's shared, already-
+  correctly-sized 112 MB.
+
+With all five fixed and real error visibility in place, the next
+failure logged was `error()`'s own one-time-per-run banner plus
+`stack_walk_windows.c`'s `load_symbol_table` failing to open
+`d:\cachebeta.map` - **a red herring**, caught and corrected before
+acting on it further: that file is a linker-generated *debug symbol
+map* (crash-stack-trace symbolication) from the original 2003 Xbox
+beta build (`errors_initialize()` -> `stack_walk_initialize()`,
+unconditionally, on every platform), not game data at all. It has
+always failed to open on every non-Xbox port too (nobody ships a 2003
+linker map), and the failure is already handled gracefully (stack
+traces just lose symbol names) - nothing to fix there, and not part of
+the real failure chain.
+
+The actual next, real failure: `shell_initialize()` -> `tag_files_
+open()` -> `cache_files_initialize()` calls plain `match_malloc` to
+allocate `cache_file_globals.requests` - and gets `NULL`, every single
+time, unconditionally. `cseries.h`'s `#define malloc(size) match_
+malloc(__FILE__, __LINE__, size)` routes *every* plain `malloc` the
+game's own code makes through `debug_malloc` -> `system_malloc` ->
+`GlobalAlloc(0, size)` - still a null stub in `switch_win32_null.c`
+(`return 0`, unconditionally) from Milestone 7, never revisited since
+most early allocations go through the separate, already-real
+`game_state_malloc`/`XPhysicalAlloc` pool instead. This was the game's
+*first* plain `malloc` call in the whole startup sequence - every
+earlier allocation happened to avoid this path, which is why it took
+until here to surface. The `match_assert` on the `NULL` result trips
+`system_exit(-1)` -> `halt_and_catch_fire()`'s "fatal error" screen
+loop, which itself immediately asserts on `global_d3d_device`
+(deliberately `NULL`ed at the end of the earlier throwaway device/
+`Present` test, not yet re-created since `_rasterizer_initialize()` is
+later in `shell_initialize()` than the point already failed) - a
+second failure that recurses into an already-`halt`ed `halt_and_catch_
+fire()`, which takes its `exit(0)` path. A clean exit, no crash, black
+screen - every symptom explained, nothing left unaccounted for.
+
+Fixed by making `GlobalAlloc`/`GlobalReAlloc`/`LocalFree`/`LocalSize`
+(`switch_win32_null.c`) real: backed by this guest's own musl heap
+(`malloc`/`realloc`/`free`/`malloc_usable_size`, the same real
+allocator a plain game-side `malloc` already proved out, back in
+Milestone 2's smoke test) rather than always failing. `GMEM_ZEROINIT`
+honored (the one `GlobalAlloc` flag any current caller sets).
+
+**Real guest-side file I/O**, built in the same pass, before the
+`GlobalAlloc` bug above was found - not actually what was blocking
+this particular crash (that was always the allocator, not file I/O),
+but genuinely needed regardless the moment the game gets far enough to
+open a real map file, which it will as soon as the allocator fix lets
+startup continue: `port/linux/src/xbox_files.c` (the Win32-file-API-
+over-POSIX layer - `CreateFileA`/`ReadFile`/`platform_translate_path`/
+`platform_data_root` and friends, no SDL or Android/Linux-specific
+code at all) is now part of `SWITCH_PLATFORM_FILES`, unmodified. It
+needed:
+- Real `open`/`read`/`write`/`close`/`lseek` guest syscalls
+  (`guest_syscall.c`'s `SYS_openat`/`read`/`write`/`close`/`lseek`,
+  `write` now fd-aware instead of unconditionally treating every fd as
+  stdout), backed by new host imports (`host_posix_io.c`) - plain
+  POSIX over devkitPro's `sdmc:` devoptab, the same real access
+  `host_main.c` already uses for `host.log` and `guest.elf`. Guest and
+  host share one process, so the guest fd *is* the host fd - no
+  separate descriptor table to keep in sync.
+- Real `posix_stat`/`fstat`/`seek`/`truncate`/`disk_space`/
+  `set_read_only`/`make_directory`/`set_file_times`/directory
+  enumeration/case-insensitive lookup (`posix.h`) as host imports too
+  (`host_posix_files.c`, wrapping `port/linux/src/posix_files.c`
+  unmodified - its own `__LP64__` branch already handles the opaque-
+  directory-handle indirection a 32-bit guest calling into a 64-bit
+  host needs, exactly `posix.h`'s own header comment's description of
+  Android's shape for this, unused until now). Needed one real,
+  Switch-specific fix inside that shared file: devkitA64's newlib
+  declares `utimensat()` but doesn't actually implement/export it for
+  this target (undefined reference at link time) - `posix_set_file_
+  times` now uses `utime()` (seconds only, which is in `libsysbase.a`
+  for real) under `__SWITCH__`, matching the file's existing `__vita__`
+  branches for the same kind of target-specific gap.
+- `platform_handle_new`/`get`, `platform_set_last_error_from_errno`,
+  `platform_unix_time_to_filetime`/`filetime_to_unix_time`, `platform_
+  queue_apc` (`xbox_kernel.c`'s generic Win32-handle-table helpers,
+  normally alongside Thread/Event/Mutex/Wait support this guest has no
+  use for yet, and its own `platform_log` which would collide with
+  `guest_platform_stubs.c`'s) copied into a new, minimal `switch_xbox_
+  handles.c` instead of pulling in the whole file. `GetLastError`/
+  `SetLastError` (`switch_win32_null.c`) made real (a single guest-
+  wide variable - no real threading exists to need `__thread` storage
+  for it) so callers can actually read back what these set.
+  `pthread_mutex_destroy`/`cond_destroy`/`mutexattr_init`/`destroy`
+  added to `guest_pthread_stubs.c` as the same genuine no-ops as their
+  init/lock/unlock siblings - `platform_handle_new` needs them to
+  exist, not to do anything real, with no second thread to matter
+  against.
+- `config_string("paths.data")` (`guest_platform_stubs.c`) now answers
+  `"sdmc:/haloce-nx"` instead of `""` - `platform_data_root()`
+  (`xbox_files.c`) checks this *first*, before any of its desktop-only
+  auto-detection (`readlink /proc/self/exe`, cwd has-`maps/`-folder
+  probing - meaningless on Switch), so this one line is the entire
+  Switch-specific piece of path resolution needed; `platform_
+  translate_path`'s drive-letter/case-insensitive-component logic
+  needed no changes at all.
+- Found one real, latent cross-ABI bug on the way: `switch_host_posix_
+  shim.h` (xiso.c's minimal stand-in for the full `posix.h`, used only
+  by the host's own xiso-extraction code) hardcoded `posix_long`/
+  `posix_ulong` as `long`/`unsigned long` - 64-bit on this LP64 host.
+  The real `posix.h` makes them 32-bit under `__LP64__` specifically so
+  both sides of a 32-bit-guest/64-bit-host boundary agree on struct
+  layout (its own header comment). Once `host_posix_files.c` linked
+  the *real* `posix_seek` into the same binary as xiso.c's shimmed
+  declaration of the same symbol, the two disagreed on scalar width
+  for the same linked function - fixed to match `posix.h`'s own
+  `__LP64__` branch exactly, not just "some 32-bit-capable type".
+  `switch_posix_null.c` (the old guest-side `ENOENT` stubs for four of
+  these names) and the file-related null stubs in `switch_win32_
+  null.c` (`CreateFileA`, `ReadFile`, ... - now real in `xbox_files.c`/
+  `switch_xbox_handles.c`) are both gone, superseded rather than left
+  alongside the real implementations.
+
+This needed rebuilding and redeploying the **host** NRO for the first
+time this session (`host_posix_io.c`/`host_posix_files.c` are new host
+imports, registered in `host_main.c`'s `kHostFunctions[]`), not just
+the guest ELF - every fix before this one only ever touched the guest
+side. Deployed and confirmed progressing further (real error logging
+now visible) before the `GlobalAlloc` bug was found as the next, real
+blocker.
+
+The `GlobalAlloc` fix itself links clean but is **not yet confirmed on
+hardware** as of this writing - the console was unreachable over FTP
+when it was ready to deploy (build artifacts are ready at
+`/tmp/real_game_entry_v14.elf`, one `curl -T ... ftp://.../guest.elf`
+away). Expect the next real failure, if any, somewhere inside the
+*actual* tag cache open/read (not `cachebeta.map` - a real map under
+`sdmc:/haloce-nx`'s `maps/`, via the now-real `xbox_files.c`/
+`host_posix_*` path above), now that both the allocator and the file
+I/O it will need are real.
+
+### Milestone 12 - done (pending hardware confirmation): real threading, controls, and audio
+
+Three more real subsystems, built in one pass while the console itself
+was unreachable over FTP for testing - each builds and links clean,
+but (unlike every fix in Milestone 11, which was a deterministic
+crash/hang a hardware log already confirmed one way or the other) real
+timing/concurrency correctness genuinely needs a console to validate,
+not just a clean link. Said plainly here rather than claimed as working.
+
+**Real threading.** `source/cache/cache_files_windows.c`'s cache-file
+worker thread turned out to be the next real blocker past Milestone
+11's `GlobalAlloc` fix - its own `match_assert`s on `CreateEventA`/
+`CreateThread`'s results, hit on every startup, are the only genuinely
+load-bearing real-threading need anywhere in the codebase (checked:
+`input_xbox.c`, `cache_files_decompress_windows.c`, and bungie_net's
+`thread_win32.c` all create threads/events too, but none of them check
+the result - safe to leave null for now). Real `libnx` underneath
+throughout, not anything hand-rolled:
+- `threadCreate`/`threadStart` for the thread itself
+  (`switch_xbox_threads.c`'s `CreateThread`, `host_threads.c`) -
+  **always called with `stack_mem=NULL`, letting libnx allocate and
+  place the stack itself.** Not the original design (see the
+  `rc=0xd401` writeup below for why a guest-allocated stack, the first
+  attempt, can't work at all).
+- `UEvent` - user-mode, not the privileged `Event`/`eventCreate` libnx
+  itself flags as off-limits for an ordinary homebrew app - for
+  `CreateEventA`/`SetEvent`/`ResetEvent`/`WaitForSingleObject(Ex)`
+  (`host_threads.c`'s `host_event_*`).
+- The host's own real `__thread` (already correctly virtualized per
+  real OS thread, since it's backed by the same compiler/libnx
+  machinery the host's own code uses) as the one piece of plumbing
+  `guest_tp.c`'s per-thread TLS block pointer needs - `__guest_get_tp`
+  just asks the host "what's my TLS pointer right now", with nothing
+  guest-side needing to track which of the real threads is calling.
+- `pthread_mutex_t` (`guest_pthread_stubs.c`) is a real spinlock now
+  (plain compiler atomics over the opaque struct's first word -
+  `PTHREAD_MUTEX_INITIALIZER`'s all-zero matches "0 = unlocked"
+  exactly, so statically-initialized mutexes need no separate runtime
+  init) - condvar stays a no-op; nothing anywhere in the build that
+  now has genuine concurrency (checked directly) ever waits on one.
+- One real bug caught in review, before ever reaching hardware: a
+  single reused `Thread`/event-table slot would have been corrupted
+  the moment a second real `CreateThread` call fired (`input_xbox.c`'s
+  own, unchecked, call does exactly that) - both are small tables now
+  (`host_threads.c`), not one-shot statics.
+
+**`threadCreate` always failed with `rc=0xd401` (`InvalidCurrentMemory`)
+on its `stack_mem` argument - root-caused and fixed.** The original
+design gave `threadCreate` a guest-addressed (sub-4 GB, since ILP32
+guest code may legally take a 32-bit pointer to anything on its own
+stack) buffer for the new thread's stack - first a dynamic
+`aligned_alloc` out of the guest heap, then (after that failed
+identically on hardware) a plain static `.bss` array, following
+`~/switch/libdol-nx`'s own already-working `threadCreate` call as a
+model. Both failed with the exact same `rc=0xd401` on hardware -
+disproving "static vs. dynamic" as the variable that mattered.
+
+Root cause, found by reading libnx's actual `threadCreate` source
+(`nx/source/kernel/thread.c` on `switchbrew/libnx` - no local copy
+ships with the installed `libnx-4.12.0-1-any.pkg.tar.zst`, had to be
+fetched from GitHub directly): `threadCreate` *always* performs its
+own internal `svcMapMemory` **MOVE** of whatever `stack_mem` it's
+given, to a brand-new mirror address it picks itself via
+`virtmemFindStack` - even the `stack_mem==NULL` ("auto-allocate")
+path does this, moving its own freshly `__libnx_aligned_alloc`'d
+memory. A MOVE's source must be one untouched block of ordinary
+"Heap"-state memory. Anything living inside this guest ELF's data
+segment - static array or heap-bump-allocated, doesn't matter which -
+is already the *destination* of `host_main.c`'s own one-time,
+whole-segment `svcMapMemory` MOVE at load time; the kernel does not
+allow MOVE-ing a MOVE's destination a second time. That is precisely
+`rc=0xd401`, and precisely why it didn't matter whether the buffer was
+static or dynamic - both lived on the wrong side of that same earlier
+MOVE.
+
+Fix: `host_create_thread` (`host_threads.c`) now always passes
+`stack_mem=NULL`, so libnx moves its own untouched heap memory (which
+satisfies the MOVE) instead of anything from the guest segment.
+`switch_xbox_threads.c`'s `CreateThread` no longer allocates a
+guest-side stack buffer at all - the whole `guest_thread_stacks[]`
+pool is gone. The real, running stack address afterwards is
+`Thread.stack_mirror`, chosen by libnx's own allocator, not anything
+this code supplies - `host_create_thread` logs it after every
+successful `threadCreate` specifically so the next hardware test can
+directly confirm it landed below 4 GB (expected, since the Switch
+homebrew map region conventionally starts low, around `0x8000000`,
+but genuinely unconfirmed without a console - this is a new, narrower
+open question the old guest-allocated design didn't have at all,
+since it is no longer this code choosing the address). Builds and
+links clean (`ninja switch_guest`, host `make`); not yet deployed, the
+console was unreachable throughout this fix.
+
+**Real controls.** `port/vita/host/vita_input.c` was the model (a
+native, non-SDL per-console backend already exists there, unlike
+audio - see below) - adapted for libnx's modern `PadState`/`pad.h`
+(`host_input.c`) instead of `sceCtrl`, with the translation into
+Xbox's `XINPUT_GAMEPAD` done guest-side (`switch_xinput_null.c`'s
+`XInputOpen`/`XInputGetState`/`XGetDeviceChanges`, one real gamepad,
+port 0 - the Xbox never had more here either) instead of in a Vita-
+specific file, since nothing else about this guest's input plumbing
+is Vita-shaped. Mapped by physical position, not letter (Nintendo's
+A/B/X/Y layout is rotated versus Xbox's - bottom face is Xbox A,
+right face is Xbox B, etc.); ZL/ZR (real triggers) to Xbox's own
+triggers, L/R (shoulder) to BLACK/WHITE, stick clicks to the Xbox
+thumb buttons directly - Switch has four shoulder-ish buttons and two
+clickable sticks where the Vita has two and zero, so unlike
+`vita_pad.c` nothing needs to borrow the D-pad for anything. **Which
+way `libnx`'s stick Y axis actually points relative to Xbox's
+`sThumbLY` is an open, hardware-only question** - implemented as a
+direct passthrough (positive = forward/up) on the untested assumption
+they already agree; a flipped look/move axis is the only possible
+symptom if that's wrong, fixable in exactly the one place it's used.
+
+**Real audio.** No non-SDL precedent existed anywhere in the codebase
+for this one (unlike input's `vita_input.c`) - Vita's own real audio
+goes through the *same* shared `port/linux/src/dsound_sdl.c` SDL
+mixer Linux does. Reading it closely paid off: its entire SDL (and
+`pthread_create`) footprint is a thin ~100-line seam at the bottom
+(`audio_callback`/`audio_start`/`silent_clock_thread`) around one
+pure, platform-agnostic `mix(float *buffer, unsigned long frames)` -
+the real complexity (Xbox ADPCM decode, resampling, inverse-distance
+rolloff, equal-power panning) is all above that seam, shared, and
+already proven on Linux/Vita. Reused as-is; only the seam itself grew
+`HALO_SWITCH` branches (same pattern Milestone 9 used for `d3d8_gl.c`
+and the Vita/Linux-shared file I/O work used for `posix_files.c`'s
+`utime`-not-`utimensat` branch), now part of `SWITCH_PLATFORM_FILES`:
+- A dedicated real guest thread (`CreateThread`, this milestone's own
+  threading work - its second real caller) runs a plain loop calling
+  `mix()` and converting its float output to 16-bit PCM, instead of
+  SDL's pull-based callback.
+- `host_audio.c`: real `libnx` `audout`, opened once
+  (`audoutOpenAudioOut`), fed through `audoutAppendAudioOutBuffer`
+  over a small table of buffers with explicit in-flight tracking
+  (`audoutGetReleasedAudioOutBuffer` polled before ever reusing one's
+  memory) rather than relying on `audoutPlayBuffer`'s documented-but-
+  unconfirmed-here blocking semantics - deliberately the more
+  defensive of two possible designs, specifically because getting
+  real-time buffer timing wrong is exactly the kind of bug that would
+  only ever show up as audio corruption/underrun on real hardware, not
+  as a link error.
+- `config_boolean("audio.enabled")` (`guest_platform_stubs.c`) now
+  answers true by default - real audio should just work on a real
+  console with real speakers, not stay silent pending a config system
+  that doesn't exist yet.
+- No clock-thread fallback for "no audio device" (unlike Linux/Vita,
+  where that is a real, common case - a misconfigured desktop, or
+  `audio.enabled=false`): real Switch hardware always has real audio
+  output, so `host_audio_open` failing isn't expected to be reached in
+  practice: if it is, sound just stays silent, the same degradation
+  Milestone 7's original null stubs already had.
+
+All three: builds and links with zero errors, deployed is pending the
+console being reachable again. The honest summary of what's actually
+confirmed versus assumed here: the *shape* of every API contract
+(Win32 semantics, struct layouts, which calls are fatal if null) was
+checked directly against the game's own call sites, the same
+evidence-based method as every earlier milestone; what's *not* yet
+checked against real evidence, because it structurally can't be
+without a console, is real-time behavior - audio buffer timing/
+underrun, the two real threads' actual scheduling, and the controller
+stick Y-axis direction noted above.
+
+Two more real bugs found by auditing every remaining null stub for the
+same shape as the `GlobalAlloc` one (Milestone 11): a function that
+returns a fixed code *without ever writing its output*, where a real
+caller reads that output unconditionally rather than checking the
+return value first - a silent wrong-value bug at best, a crash at
+worst, not just "a feature is missing":
+- **`QueryPerformanceCounter`/`QueryPerformanceFrequency`** (`switch_
+  win32_null.c`) always returned 0 (Win32 failure) without touching
+  their `LARGE_INTEGER` output - `source/cseries/profile.c`'s own
+  `profile_initialize` reads `frequency.QuadPart` right after calling
+  `QueryPerformanceFrequency` with no check on its return value at
+  all, and whatever garbage was already on the stack there becomes
+  `profile_globals.timebase_frequency` - a real, if data-dependent,
+  divide-by-zero risk for anything that later divides by it. Real now:
+  AArch64's own `CNTPCT_EL0`/`CNTFRQ_EL0` system counter registers,
+  read directly with inline `mrs` - the same ones `libnx`'s own
+  `armGetSystemTick`/`armGetSystemTickFreq` (`arm/counter.h`) use, an
+  ordinary EL0 (unprivileged, guest-code-legal) read needing no host
+  import at all. `GetTickCount` made real the same way, for free.
+- **`vita_host_time_us`** (`guest_platform_stubs.c`) returned a
+  constant 0 - documented at the time as "fine, nothing divides by
+  it", which was true, but every one of its real callers (profiling in
+  `source/game/game.c`, `source/objects/objects.c`, `source/render/*`;
+  a cache lock's 3-second stall warning in `source/memory/
+  lruv_cache.c`) only ever *subtracts* two calls' results, so a
+  monotonic-since-boot counter answers exactly as correctly as a real
+  wall clock would for any of them. Same two registers as above, converted
+  to microseconds with one division by the always-nonzero hardware
+  frequency (not by a separately pre-scaled, theoretically-zeroable
+  intermediate).
+
+### Milestone 13 - in progress: first hardware confirmation past Milestone 12, and two more missing syscalls
+
+The `stack_mem=NULL` fix (Milestone 12's `rc=0xd401` writeup) is
+confirmed working on real hardware, first try: `host_create_thread`'s
+own log read back `stack_mirror=0x7f6e7000 (below 4GB)` - both halves
+of the open question from that writeup (does the MOVE succeed; does
+libnx's own mirror address land sub-4 GB) answered yes, on the same
+test. `shell_initialize()` got measurably further than any previous
+build: past `errors_initialize`, into real save-data setup (`save
+root: sdmc:/haloce-nx`), before stopping - not a crash or a hang, the
+guest called `exit()` itself, cleanly.
+
+Root cause, found by tracing backward from the exact syscall logged
+right before the exit: `source/cache/cache_files_windows.c`'s cache
+init deletes stale cache files, then writes a fresh cache file header
+through `xbox_files.c`'s `write_at()` - which calls plain `pwrite()`
+for its positioned/`OVERLAPPED` case, not a separate `lseek()`+
+`write()` pair. `pwrite64` (syscall 68) had no case in
+`__guest_syscall` at all, so it always failed with `-ENOSYS`; the
+header write came back `FALSE`, and the game's own cache-init error
+path decided that was fatal and exited cleanly - no crash to chase,
+just a real gap doing exactly what Milestone 2's design promised
+("everything unhandled logs loudly" - and it did, immediately pointing
+at the right call site). Fixed with a case that does a plain
+`host_lseek` to the given offset followed by `host_write_fd` - no real
+fd is ever shared between the two real threads that exist (checked),
+so this is exactly as atomic as the guest needs, not a shortcut taken
+under pressure.
+
+Found and fixed proactively in the same pass, before hitting it on a
+separate hardware round-trip: `read_some()` (same file) has the exact
+same `pread()`-for-positioned-reads shape, and `cache_file_read` - the
+one function every real map/tag read in the game goes through - is
+its real caller. `pread64` (syscall 67) gets the same seek-then-read
+treatment. Builds and links clean (`guest_syscall.o` recompiled and
+`guest.elf` relinked by hand - see the note below on why this step
+isn't in `tools/switch_build.py`); deployed, not yet hardware-tested.
+
+**Process note, worth keeping:** `guest.elf` itself is never produced
+by `ninja`/`configure.py` - only the 528 objects under
+`build/switch/obj` are (the `switch_guest` phony target). The actual
+link is, and always has been, a hand-typed `aarch64-none-elf-gcc
+-Wl,-T,guest.ld ...` command combining those with the guest runtime
+glue objects (`guest_main.o`, `guest_syscall.o`, `guest_tp.o`, etc. -
+compiled individually in `port/switch/guest/`, also not part of
+`ninja`) and `build/musl/libc.a`. Losing track of that command once
+cost real time mid-session; it's reconstructable from this doc's own
+Milestone 8 description plus `port/switch/guest/guest.ld`, but
+treating it as "just run ninja" is wrong and will link a stale or
+incomplete image.
+
 ## Unexplored
 
 - Whether Switch homebrew has an `mprotect`-equivalent for the desktop

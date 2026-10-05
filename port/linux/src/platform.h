@@ -122,6 +122,19 @@ offsets into whichever block it is. Its first page is never handed
 out, so no block has physical address 0 (which Direct3D reads as none). */
 extern unsigned long platform_contiguous_base;
 #define PLATFORM_CONTIGUOUS_BASE platform_contiguous_base
+/* A prior attempt gave Switch its own smaller 64 MB arena here, reasoned
+from source/cache/physical_memory_map.c's GAME_STATE_SIZE as the Xbox's
+own 0x345000 (~3.3 MB). Wrong: under HALO_LINUX (which Switch is, see
+halo_linux_prefix.h) that macro is HALO_PORT_GAME_STATE_SIZE instead
+(port/linux/include/halo_port_capacity.h) - 16.75 MB, not 3.3. Real total
+(GAME_STATE_SIZE + TAG_CACHE_SIZE + TEXTURE_CACHE_SIZE + SOUND_CACHE_SIZE)
+is ~64.75 MB, already bigger than the 64 MB arena before the back/depth
+buffers physical_memory_allocate's caller allocates even earlier - this
+made physical_memory_allocate's XPhysicalAlloc fail deterministically,
+every run, confirmed on hardware (its own post-allocation platform_log
+never printed once in 7 separate test runs). Vita's 112 MB was never an
+oversized historical constant to right-size - it was already sized
+against this exact shared total. */
 #define PLATFORM_CONTIGUOUS_SIZE 0x07000000UL /* 112 MB */
 #else
 #define PLATFORM_CONTIGUOUS_BASE 0x80000000UL

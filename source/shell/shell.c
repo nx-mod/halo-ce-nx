@@ -21,37 +21,54 @@ static boolean application_paused;
 
 /* ---------- public code */
 
+#ifdef HALO_SWITCH
+extern void platform_log(const char *format, ...);
+#define SHELL_SWITCH_TRACE(step) platform_log("shell_initialize: " step " done")
+#else
+#define SHELL_SWITCH_TRACE(step)
+#endif
+
 boolean shell_initialize(
 	void)
 {
 	boolean success = FALSE;
 	boolean platform_initialized = FALSE;
-	
+
 	cseries_initialize();
+	SHELL_SWITCH_TRACE("cseries_initialize");
 	platform_initialized = shell_platform_initialize();
-	
+	SHELL_SWITCH_TRACE("shell_platform_initialize");
+
 	if (platform_initialized)
 	{
 		boolean rasterizer_initialized;
-		
+
 		errors_initialize();
+		SHELL_SWITCH_TRACE("errors_initialize");
 		tag_files_open();
+		SHELL_SWITCH_TRACE("tag_files_open");
 		real_math_initialize();
+		SHELL_SWITCH_TRACE("real_math_initialize");
 		game_state_initialize();
-		
+		SHELL_SWITCH_TRACE("game_state_initialize");
+
 		rasterizer_initialized = rasterizer_initialize();
-		
+		SHELL_SWITCH_TRACE("rasterizer_initialize");
+
 		if (rasterizer_initialized)
 		{
 			input_initialize();
+			SHELL_SWITCH_TRACE("input_initialize");
 			sound_initialize();
-			
+			SHELL_SWITCH_TRACE("sound_initialize");
+
 			success = TRUE;
 		}
-			
+
 		shell_platform_verify();
+		SHELL_SWITCH_TRACE("shell_platform_verify");
 	}
-	
+
 	return success;
 }
 

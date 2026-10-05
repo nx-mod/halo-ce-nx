@@ -35,9 +35,14 @@ __attribute__((section(".guest_header"), used)) const struct guest_header guest_
 };
 
 extern void __guest_runtime_init(void);
+extern void __guest_tp_init_main_thread(void);
 
 void __guest_entry(void)
 {
+	/* before anything else - musl's own TLS access (__get_tp, guest_tp.c)
+	needs this thread's block set up before any function that might
+	touch it, which is nearly everything past this point */
+	__guest_tp_init_main_thread();
 	__guest_runtime_init();
 	host_log("guest entry reached; exercising musl now");
 

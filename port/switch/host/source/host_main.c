@@ -89,6 +89,61 @@ void host_gl_fence_frame(unsigned int slot);
 void host_gl_wait_frame(unsigned int slot);
 void *host_gl_resolve(const char *name);
 
+/* PORTING.md's "real file I/O" milestone: port/switch/host/source/
+host_posix_io.c (raw fd open/read/write/close/lseek, under
+guest_syscall.c's SYS_openat/read/write/close/lseek) and
+host_posix_files.c (port/linux/src/posix_files.c, unmodified - its own
+32-bit-both-sides posix_ulong already matches what xbox_files.c, now
+part of SWITCH_PLATFORM_FILES, expects). Struct-pointer parameters are
+declared `void *` here rather than pulling in posix.h's struct
+definition - these are never called directly in this file, only
+addressed, so the exact pointee type doesn't need to be visible. */
+long host_open(const char *path, int flags, int mode);
+long host_read(int fd, void *buf, unsigned long count);
+long host_write_fd(int fd, const void *buf, unsigned long count);
+long host_close(int fd);
+long long host_lseek(int fd, long long offset, int whence);
+int posix_stat(const char *path, void *information);
+int posix_fstat(int descriptor, void *information);
+int posix_set_file_times(const char *path, unsigned int access_seconds, unsigned int access_nanoseconds,
+	unsigned int modification_seconds, unsigned int modification_nanoseconds);
+int posix_seek(int descriptor, int offset_low, int offset_high, int whence,
+	unsigned int *position_low, unsigned int *position_high);
+int posix_truncate(int descriptor, unsigned int size_low, unsigned int size_high);
+int posix_disk_space(const char *path, unsigned int *free_low, unsigned int *free_high,
+	unsigned int *total_low, unsigned int *total_high);
+int posix_set_read_only(const char *path, int read_only);
+int posix_make_directory(const char *path);
+void *posix_directory_open(const char *path);
+int posix_directory_next(void *directory, char *name, unsigned int name_size);
+void posix_directory_close(void *directory);
+int posix_find_entry_case_insensitive(const char *directory, const char *name, char *result,
+	unsigned int result_size);
+
+/* PORTING.md's "real threading" milestone: source/cache/cache_files_
+windows.c's cache-file worker thread is genuinely load-bearing (see
+host_threads.c's own header comment) - real libnx threadCreate/UEvent
+underneath, not anything hand-rolled. */
+long host_create_thread(unsigned int guest_entry, unsigned int guest_arg, unsigned int stack_mem,
+	unsigned int stack_size, unsigned int tls_block);
+long host_event_create(int auto_clear);
+void host_event_signal(long handle);
+void host_event_clear(long handle);
+long host_event_wait(long handle, long long timeout_ns);
+void *host_get_guest_tp(void);
+void host_set_guest_tp(void *ptr);
+
+/* PORTING.md's "wire in audio/controls" milestone: the single real
+PadState libnx's pad.h is built around (host_input.c). */
+void host_pad_read(unsigned long long *buttons, int *lx, int *ly, int *rx, int *ry);
+int host_pad_connected(void);
+
+/* same milestone: real audio output (host_audio.c) - libnx audout, fed
+from a dedicated real guest thread running dsound_sdl.c's own mixer */
+int host_audio_open(void);
+void host_audio_write(const short *pcm);
+int host_audio_frames_per_buffer(void);
+
 static const struct host_function kHostFunctions[] = {
 	{"host_log", (void *)host_log_impl},
 	{"host_write", (void *)host_write_impl},
@@ -102,6 +157,35 @@ static const struct host_function kHostFunctions[] = {
 	{"host_gl_buffer_write", (void *)host_gl_buffer_write},
 	{"host_gl_fence_frame", (void *)host_gl_fence_frame},
 	{"host_gl_wait_frame", (void *)host_gl_wait_frame},
+	{"host_open", (void *)host_open},
+	{"host_read", (void *)host_read},
+	{"host_write_fd", (void *)host_write_fd},
+	{"host_close", (void *)host_close},
+	{"host_lseek", (void *)host_lseek},
+	{"posix_stat", (void *)posix_stat},
+	{"posix_fstat", (void *)posix_fstat},
+	{"posix_set_file_times", (void *)posix_set_file_times},
+	{"posix_seek", (void *)posix_seek},
+	{"posix_truncate", (void *)posix_truncate},
+	{"posix_disk_space", (void *)posix_disk_space},
+	{"posix_set_read_only", (void *)posix_set_read_only},
+	{"posix_make_directory", (void *)posix_make_directory},
+	{"posix_directory_open", (void *)posix_directory_open},
+	{"posix_directory_next", (void *)posix_directory_next},
+	{"posix_directory_close", (void *)posix_directory_close},
+	{"posix_find_entry_case_insensitive", (void *)posix_find_entry_case_insensitive},
+	{"host_create_thread", (void *)host_create_thread},
+	{"host_event_create", (void *)host_event_create},
+	{"host_event_signal", (void *)host_event_signal},
+	{"host_event_clear", (void *)host_event_clear},
+	{"host_event_wait", (void *)host_event_wait},
+	{"host_get_guest_tp", (void *)host_get_guest_tp},
+	{"host_set_guest_tp", (void *)host_set_guest_tp},
+	{"host_pad_read", (void *)host_pad_read},
+	{"host_pad_connected", (void *)host_pad_connected},
+	{"host_audio_open", (void *)host_audio_open},
+	{"host_audio_write", (void *)host_audio_write},
+	{"host_audio_frames_per_buffer", (void *)host_audio_frames_per_buffer},
 };
 
 static void *resolve_import(const char *name)
