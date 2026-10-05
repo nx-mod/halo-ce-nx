@@ -80,10 +80,6 @@ void __guest_entry(void)
 	it's just sat there as an unused extern symbol until now). Milestone
 	10's guest_text_demo() already proved the GL pipeline separately -
 	not called here too, to keep whatever happens next unambiguous. */
-	/* no environment on Switch: the game's built-in profiler (frame
-	splits every 300 frames) is switched on here while chasing frame
-	rate */
-	setenv("HALO_RENDER_PROFILE", "1", 1);
 	host_log("calling the game's real main() now");
 	extern int main(void);
 	main();

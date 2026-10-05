@@ -894,6 +894,12 @@ static void gl_initialize(void)
 		xgpu_capabilities.anisotropy = host_gl_has_extension("GL_EXT_texture_filter_anisotropic");
 		xgpu_capabilities.base_vertex = es32;
 		xgpu_capabilities.shading_language = major > 3 || (major == 3 && minor >= 1) ? "310 es" : "300 es";
+#ifdef HALO_SWITCH
+		/* the occlusion-query path: reading the atomic counters back waits
+		for the GPU (13-20 ms a frame of lens flare tests in a level); a
+		query reports "not ready" instead, and the game keeps last frame's */
+		xgpu_capabilities.atomic_counters = FALSE;
+#else
 		if (major > 3 || (major == 3 && minor >= 1))
 		{
 			GLint counters = 0;
@@ -901,6 +907,7 @@ static void gl_initialize(void)
 			glGetIntegerv(GL_MAX_FRAGMENT_ATOMIC_COUNTERS, &counters);
 			xgpu_capabilities.atomic_counters = counters > 0;
 		}
+#endif
 		xgpu_capabilities.s3tc = host_gl_has_extension("GL_EXT_texture_compression_s3tc") ||
 			(host_gl_has_extension("GL_EXT_texture_compression_dxt1") &&
 			host_gl_has_extension("GL_ANGLE_texture_compression_dxt3") &&

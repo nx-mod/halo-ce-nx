@@ -195,12 +195,19 @@ void console_warning(
 	vsprintf(buffer, format, arglist);
 	buffer[255] = '\0';
 
+#ifdef HALO_SWITCH
+	/* debug.txt only: the debug build's red warnings ("event handler ...
+	failed" on normal menu flow) covered the screen */
+	csstrncat(buffer, "\r\n", NUMBEROF(buffer));
+	write_to_error_file(buffer, TRUE);
+#else
 	terminal_printf(global_real_argb_red, "%s", buffer);
 	if (console_dump_to_file)
 	{
 		csstrncat(buffer, "\r\n", NUMBEROF(buffer));
 		write_to_error_file(buffer, TRUE);
 	}
+#endif
 
 	va_end(arglist);
 
