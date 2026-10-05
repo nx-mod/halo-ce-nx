@@ -124,12 +124,20 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 	{
 		int w = 0, h = 0;
 
-		/* a black frame with the loading text, up until the game presents */
+		int buffer;
+
+		/* every buffer of the window's swap chain black with the loading
+		text: the game's first present draws nothing (its blit fails at
+		frame 0), and a buffer left as it was showed the previous app's
+		last frame for a moment - an orange or negative image */
 		platform_video_drawable_size(&w, &h);
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-		host_loading_text_draw(w, h);
-		eglSwapBuffers(s_display, s_surface);
+		for (buffer = 0; buffer < 3; buffer++)
+		{
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			host_loading_text_draw(w, h);
+			eglSwapBuffers(s_display, s_surface);
+		}
 	}
 	return 1;
 }
