@@ -24,6 +24,7 @@ host_close
 host_lseek
 host_unlink
 host_rename
+host_loading_text_stop
 posix_stat
 posix_fstat
 posix_set_file_times

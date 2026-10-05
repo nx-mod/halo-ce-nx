@@ -299,9 +299,11 @@ void error(
 		bss_0031df2c.last_error_time = time;
 		if (bss_0031df2c.error_count == 10)
 		{
+#ifndef HALO_SWITCH
 			terminal_printf(
 				global_real_argb_white,
 				"too many errors, only printing to debug.txt");
+#endif
 		}
 		bss_0031df2c.error_count++;
 		if (bss_0031df2c.error_count >= 10)
@@ -333,7 +335,13 @@ void error(
 			va_end(argument_list);
 			csstrcat(string, "\r\n");
 
+#ifdef HALO_SWITCH
+			/* silent errors go to debug.txt only: the debug build's on-screen
+			error console covered the menu */
+			if (priority != _error_log && priority != _error_silent)
+#else
 			if (priority != _error_log)
+#endif
 			{
 				terminal_printf(global_real_argb_white, "%s", string);
 			}

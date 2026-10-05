@@ -72,7 +72,12 @@ void platform_handle_signal(struct platform_handle *handle)
 
 BOOL WINAPI CloseHandle(HANDLE object)
 {
-	struct platform_handle *handle = platform_handle_get(object, 0);
+	extern int guest_thread_close(void *handle);
+	struct platform_handle *handle;
+
+	if (guest_thread_close(object))
+		return TRUE;
+	handle = platform_handle_get(object, 0);
 
 	if (!handle)
 		return FALSE;

@@ -22,7 +22,7 @@ since it draws in the middle of the game's own rendering.
 #define LOADING_TEXT "GITHUB | NX-MOD | HALOCE-NX"
 /* the main loop presents every frame; the startup frames come one at a
 time with seconds between them */
-#define LOADING_TEXT_FRAMES 30
+#define LOADING_TEXT_FRAMES 30 /* a fallback: main.c calls host_loading_text_stop */
 #define MAXIMUM_SEGMENTS_PER_GLYPH 10
 
 struct segment { float x0, y0, x1, y1; };
@@ -154,6 +154,11 @@ static void build_vertices(int width, int height)
 	s_vertex_count = count / 2;
 	s_built_width = width;
 	s_built_height = height;
+}
+
+void host_loading_text_stop(void)
+{
+	s_frames_left = 0;
 }
 
 void host_loading_text_draw(int width, int height)

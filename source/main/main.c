@@ -3518,6 +3518,13 @@ void main_loop(
 
 			if (switch_iterations < 3 || switch_iterations == 30 || switch_iterations == 300)
 				platform_log("main_loop: iteration %ld", switch_iterations);
+			if (!switch_iterations)
+			{
+				/* loading is over: the host stops drawing its loading text */
+				extern void host_loading_text_stop(void);
+
+				host_loading_text_stop();
+			}
 			switch_iterations++;
 		}
 #endif

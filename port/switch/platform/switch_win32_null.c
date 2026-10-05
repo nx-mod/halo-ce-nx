@@ -41,21 +41,6 @@ long __stdcall CompareFileTime(const struct _FILETIME *, const struct _FILETIME 
 	return 0;
 }
 
-unsigned long __stdcall ResumeThread(void *)
-{
-	return 0;
-}
-
-int __stdcall SetThreadPriority(void *, int)
-{
-	return 0;
-}
-
-int __stdcall GetExitCodeThread(void *, unsigned long *)
-{
-	return 0;
-}
-
 int __stdcall SwitchToThread(void)
 {
 	return 0;

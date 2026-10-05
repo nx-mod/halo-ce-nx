@@ -174,6 +174,7 @@ static const struct host_function kHostFunctions[] = {
 	{"host_lseek", (void *)host_lseek},
 	{"host_unlink", (void *)host_unlink},
 	{"host_rename", (void *)host_rename},
+	{"host_loading_text_stop", (void *)host_loading_text_stop},
 	{"posix_stat", (void *)posix_stat},
 	{"posix_fstat", (void *)posix_fstat},
 	{"posix_set_file_times", (void *)posix_set_file_times},
