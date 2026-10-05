@@ -1657,6 +1657,9 @@ static void retail_load_loading_image(
 	{
 		FILE *file= fopen(paths[path_index], "rb");
 
+#ifdef HALO_SWITCH
+		platform_log("loading screen: %s %s", paths[path_index], file ? "opened" : "not found");
+#endif
 		if (file)
 		{
 			long size= -1;
@@ -1666,6 +1669,9 @@ static void retail_load_loading_image(
 				size= ftell(file);
 			if (size>0 && !fseek(file, 0, SEEK_SET))
 				xbe= malloc(size);
+#ifdef HALO_SWITCH
+			platform_log("loading screen: size %ld, buffer %p", size, (void *)xbe);
+#endif
 			if (xbe && fread(xbe, 1, size, file)==(size_t)size && retail_find_loading_image(xbe, size))
 				platform_log("loading screen: the retail picture from %s", paths[path_index]);
 			free(xbe);

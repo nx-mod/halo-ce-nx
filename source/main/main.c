@@ -3466,6 +3466,13 @@ static void main_split_report(void)
 #define MAIN_SPLIT(step) main_split_mark(step)
 #endif
 
+#ifdef HALO_SWITCH
+extern void platform_log(const char *format, ...);
+#define MAIN_SWITCH_TRACE(step) platform_log("main_loop: " step " done")
+#else
+#define MAIN_SWITCH_TRACE(step)
+#endif
+
 void main_loop(
 	void)
 {
@@ -3487,14 +3494,29 @@ void main_loop(
 	main_globals.halt_time_scale = TRUE;
 
 	console_initialize();
+	MAIN_SWITCH_TRACE("console_initialize");
 	debug_keys_initialize();
+	MAIN_SWITCH_TRACE("debug_keys_initialize");
 	game_initialize();
+	MAIN_SWITCH_TRACE("game_initialize");
 	console_startup();
+	MAIN_SWITCH_TRACE("console_startup");
 	main_setup_connection();
+	MAIN_SWITCH_TRACE("main_setup_connection");
 	main_initialize_time();
+	MAIN_SWITCH_TRACE("main_initialize_time");
 
 	while (TRUE)
 	{
+#ifdef HALO_SWITCH
+		{
+			static long switch_iterations;
+
+			if (switch_iterations < 3 || switch_iterations == 30 || switch_iterations == 300)
+				platform_log("main_loop: iteration %ld", switch_iterations);
+			switch_iterations++;
+		}
+#endif
 #ifdef HALO_LINUX
 		main_test_commands_update();
 #endif

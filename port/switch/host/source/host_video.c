@@ -138,10 +138,14 @@ void platform_video_drawable_size(int *width, int *height)
 
 extern void logf_both(const char *fmt, ...);
 
+/* read by host_main.c's heartbeat thread */
+volatile unsigned long g_host_swap_count;
+
 void platform_video_swap(void)
 {
 	static int failure_count;
 
+	g_host_swap_count++;
 	if (s_display == EGL_NO_DISPLAY)
 		return;
 	/* never checked before this - a silently failing swap (e.g.

@@ -512,6 +512,41 @@ static void ensure_game_data_extracted(void)
 	}
 }
 
+/* Every few seconds, how many frames the game has presented: a hang
+with no log line says nothing on its own, this says whether the game
+is still presenting (alive, stuck loading) or frozen. */
+extern volatile unsigned long g_host_swap_count;
+
+static void heartbeat_thread(void *arg)
+{
+	u64 start = armGetSystemTick();
+	unsigned long last_swaps = (unsigned long)-1;
+	int ticks = 0;
+
+	(void)arg;
+	for (;;)
+	{
+		unsigned long swaps;
+
+		svcSleepThread(2000000000ULL);
+		ticks++;
+		swaps = g_host_swap_count;
+		/* every 2 s while frames are moving, every 10 s once stalled */
+		if (swaps != last_swaps || ticks % 5 == 0)
+			logf_both("heartbeat: %llus, %lu frames presented\n",
+				armTicksToNs(armGetSystemTick() - start) / 1000000000ULL, swaps);
+		last_swaps = swaps;
+	}
+}
+
+static void start_heartbeat(void)
+{
+	static Thread thread;
+
+	if (R_SUCCEEDED(threadCreate(&thread, heartbeat_thread, NULL, NULL, 0x4000, 0x3F, -2)))
+		threadStart(&thread);
+}
+
 int main(int argc, char *argv[])
 {
 	consoleInit(NULL);
@@ -521,6 +556,7 @@ int main(int argc, char *argv[])
 
 	ensure_game_data_extracted();
 	host_loading_text_console();
+	start_heartbeat();
 
 	if (load_and_run_guest("sdmc:/switch/halo-ce-nx-guest-poc/guest.elf") == 0)
 		logf_both("SUCCESS: the guest loaded, ran and called back into the host.\n");
