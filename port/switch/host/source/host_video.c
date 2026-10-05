@@ -387,8 +387,27 @@ unsigned int host_gl_read_buffer_word(unsigned int buffer, unsigned int offset)
 	return value;
 }
 
+/* the stream and index uploads of every immediate draw (d3d8_gl.c), and
+the mirror's never-drawn pages. All land where no queued draw reads: the
+stream buffers rotate per frame behind fences (host_gl_wait_frame), and
+within a frame each upload gets fresh room. glBufferSubData did not know
+that, and on this driver a write to a buffer the GPU is still reading
+waits for the GPU - once per small draw: a menu's hundreds of text and
+widget quads, every lens flare test. Mapped unsynchronized instead. */
 void host_gl_buffer_write(unsigned int target, unsigned int offset, unsigned int size, const void *data)
 {
+	void *mapped;
+
+	if (!size)
+		return;
+	mapped = glMapBufferRange(target, (GLintptr)offset, (GLsizeiptr)size,
+		GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_INVALIDATE_RANGE_BIT);
+	if (mapped)
+	{
+		memcpy(mapped, data, size);
+		glUnmapBuffer(target);
+		return;
+	}
 	glBufferSubData(target, (GLintptr)offset, (GLsizeiptr)size, data);
 }
 
