@@ -3685,6 +3685,15 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 #endif
 	}
 	device.frame++;
+#ifdef HALO_SWITCH
+	{
+		/* port/switch/platform/switch_memory_watch.c: content hashing,
+		at most once a frame per page */
+		extern void memory_watch_frame(void);
+
+		memory_watch_frame();
+	}
+#endif
 	stats.presents++;
 	if (debug_settings.statistics && device.frame % 60 == 0)
 	{

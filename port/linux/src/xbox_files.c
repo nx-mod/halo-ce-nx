@@ -397,9 +397,10 @@ static BOOL read_at(struct platform_file *file, LPVOID buffer, DWORD count, LPDW
 	BOOL positioned, unsigned long long offset)
 {
 	DWORD total = 0;
-#ifdef HALO_VITA
+#if defined(HALO_VITA) || defined(HALO_SWITCH)
 	/* (the reader's buffer is written by the host: textures decoded from
-	it are made again - the Vita sees no other sign of the write) */
+	it are made again - the Vita sees no other sign of the write; Switch
+	would see it at the next hash, this makes it immediate) */
 	if (buffer && count)
 		memory_watch_prepare_write(buffer, count);
 #endif
@@ -450,7 +451,7 @@ static BOOL read_at(struct platform_file *file, LPVOID buffer, DWORD count, LPDW
 		total += (DWORD)result;
 	}
 	free(staging);
-#ifdef HALO_VITA
+#if defined(HALO_VITA) || defined(HALO_SWITCH)
 	/* (and marked again now the data is there: a texture made from the
 	buffer while the read was in flight is made again) */
 	if (buffer && total)
