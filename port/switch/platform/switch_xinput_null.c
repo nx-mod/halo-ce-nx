@@ -249,9 +249,11 @@ void __stdcall XPhysicalProtect(void *address, unsigned long size, unsigned long
 	(void)protect;
 }
 
+/* XPhysicalProtect above never changes protection on Switch, so every
+page really is read/write - physical_memory_verify asserts exactly that */
 unsigned long __stdcall XQueryMemoryProtect(void *)
 {
-	return 0;
+	return 0x04; /* PAGE_READWRITE */
 }
 
 /* source/shell/shell_xbox.c's main() calls fuck_code_in_the_eye() (an
