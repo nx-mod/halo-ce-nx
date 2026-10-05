@@ -249,6 +249,14 @@ static void lock_level(const DWORD *resource, unsigned long face, unsigned long 
 	xgpu_texture_describe(resource[3], resource[4], &description);
 	pitch = xgpu_texture_level_pitch(&description, level);
 	bits = (char *)resource_data(resource[1]);
+#ifdef HALO_SWITCH
+	/* The game writes the texels next. Switch's memory watch hashes a
+	page at most once a frame, so a texture rewritten in between drew its
+	old texels: glyphs written into the text cache showed garbled for a
+	frame or two. Told here, the next draw sees the write. Every face. */
+	if (bits)
+		memory_watch_forget(bits, xgpu_texture_face_size(&description) * (description.cube_map ? 6 : 1));
+#endif
 	if (bits)
 		bits += face * xgpu_texture_face_size(&description) + xgpu_texture_level_offset(&description, level);
 	if (rectangle && bits)
@@ -294,6 +302,11 @@ void WINAPI D3DVolumeTexture_LockBox(D3DVolumeTexture *texture, UINT level, D3DL
 	row_pitch = xgpu_texture_level_pitch(&description, level);
 	slice = row_pitch * level_dimension(description.height, level);
 	bits = (char *)resource_data(resource[1]);
+#ifdef HALO_SWITCH
+	/* (as lock_level) */
+	if (bits)
+		memory_watch_forget(bits, xgpu_texture_face_size(&description));
+#endif
 	if (bits)
 		bits += xgpu_texture_level_offset(&description, level);
 	if (box && bits)
@@ -386,9 +399,30 @@ HRESULT WINAPI D3DDevice_CreateVertexBuffer(UINT length, DWORD usage, DWORD fvf,
 
 void WINAPI D3DVertexBuffer_Lock(D3DVertexBuffer *buffer, UINT offset, UINT size, BYTE **data, DWORD flags)
 {
-	(void)size;
 	(void)flags;
 	*data = buffer->Data ? (BYTE *)resource_data(buffer->Data) + offset : NULL;
+#ifdef HALO_SWITCH
+	/* The game writes through the pointer next. Switch's memory watch
+	hashes a page at most once a frame, so a buffer the game rewrites more
+	often (dynamic geometry) drew its old contents; told here instead, the
+	draw that follows the write sees it. size 0 is the rest of the buffer. */
+	if (*data)
+	{
+		extern unsigned long platform_contiguous_block_bytes(const void *address);
+		unsigned long bytes = size;
+
+		if (!bytes)
+		{
+			unsigned long block = platform_contiguous_block_bytes(resource_data(buffer->Data));
+
+			bytes = block > offset ? block - offset : 0;
+		}
+		if (bytes)
+			memory_watch_forget(*data, bytes);
+	}
+#else
+	(void)size;
+#endif
 }
 
 HRESULT WINAPI D3DDevice_CreateIndexBuffer(UINT length, DWORD usage, D3DFORMAT format, D3DPOOL pool, D3DIndexBuffer **result)

@@ -885,11 +885,26 @@ static long decal_sort_cluster(long decal_index)
 	return count;
 }
 
+#ifdef HALO_SWITCH
+void memory_watch_forget(void *address, unsigned long size);
+#endif
+
 static void decal_batch_flush(void)
 {
 	if (decal_batch_quads > 0)
 	{
 		decal_stats_draws++;
+#ifdef HALO_SWITCH
+		/* (port) Every batch is written into the same two buffers, many
+		times a frame. Linux's renderer sees each rewrite as a write fault;
+		Switch's hashes a page at most once a frame (switch_memory_watch.c),
+		so the frame's later batches drew the first batch's vertices:
+		decals missing, or another decal in their place, changing with the
+		view. The renderer is told these were written. */
+		memory_watch_forget(decal_batch_vertices, (unsigned long)decal_batch_quads * 4 * sizeof(struct decal_vertex));
+		if (decal_batch_colors)
+			memory_watch_forget(decal_batch_colors, (unsigned long)decal_batch_quads * 4 * sizeof(decal_batch_colors[0]));
+#endif
 		IDirect3DDevice8_SetStreamSource(global_d3d_device, 0, decal_batch_buffer, sizeof(struct decal_vertex));
 		if (decal_color_stream_enabled() && decal_batch_one_color)
 		{

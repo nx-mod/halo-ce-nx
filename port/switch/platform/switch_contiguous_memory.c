@@ -136,3 +136,15 @@ void platform_contiguous_free(void *address)
 		page_protection[page] = 0;
 	block_page_count[first] = 0;
 }
+
+/* the bytes of the block that starts at address (0 if none does): what a
+vertex buffer Lock of "the rest" covers (d3d8_resources.c) */
+unsigned long platform_contiguous_block_bytes(const void *address)
+{
+	unsigned long first;
+
+	if (!platform_is_contiguous(address))
+		return 0;
+	first = ((unsigned long)address - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES;
+	return block_page_count[first] * PAGE_SIZE_BYTES;
+}
