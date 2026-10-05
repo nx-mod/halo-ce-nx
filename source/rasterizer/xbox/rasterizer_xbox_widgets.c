@@ -889,6 +889,13 @@ void _rasterizer_widget_draw_sprite3d(
 	return;
 }
 
+#ifdef HALO_SWITCH
+/* (port) rasterizer_lights.c: this test's GPU query is skipped this frame
+(display.lens_flare_test_every); its pixel count is still worked out, and
+the query's last result stands */
+boolean rasterizer_occlusion_test_skip_query;
+#endif
+
 long _rasterizer_widget_submit_occlusion_test(
 	real_point3d const *point,
 	real radius,
@@ -933,7 +940,11 @@ long _rasterizer_widget_submit_occlusion_test(
 				32767.0f)));
 
 			pixel_count = MAX(0, (x1 - x0) * (y1 - y0));
+#ifdef HALO_SWITCH
+			if (pixel_count > 0 && !rasterizer_occlusion_test_skip_query)
+#else
 			if (pixel_count > 0)
+#endif
 			{
 				IDirect3DDevice8_BeginVisibilityTest(global_d3d_device);
 				IDirect3DDevice8_Begin(

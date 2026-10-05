@@ -931,9 +931,51 @@ void rasterizer_lens_flare_submit_for_cluster(
 	return;
 }
 
+#ifdef HALO_SWITCH
+/* (port) display.lens_flares and display.lens_flare_test_every. A test is a
+GPU query around a small draw, and a10's cryo bay has enough lights that
+testing them all cost 11-16 ms a frame. Results arrive a frame or more
+late and a flare fades over several, so each light tested every Nth frame
+looks the same at a fraction of the cost. */
+extern boolean rasterizer_occlusion_test_skip_query;
+int config_boolean(const char *name);
+long config_integer(const char *name);
+
+static int lens_flares_enabled(void)
+{
+	static int enabled = -1;
+
+	if (enabled < 0)
+		enabled = config_boolean("display.lens_flares");
+	return enabled;
+}
+
+static long lens_flare_test_every(void)
+{
+	static long every = -1;
+
+	if (every < 0)
+	{
+		every = config_integer("display.lens_flare_test_every");
+		if (every < 1)
+			every = 1;
+		if (every > 8)
+			every = 8;
+	}
+	return every;
+}
+#endif
+
 void rasterizer_lens_flares_submit_occlusion_tests(
 	void)
 {
+#ifdef HALO_SWITCH
+	static unsigned long test_frame;
+
+	if (!lens_flares_enabled())
+		return;
+	test_frame++;
+#endif
 	rasterizer_profile_begin(_rasterizer_profile_lens_flare_occlusion_submit);
 
 	if (rasterizer_debug_options.lens_flares && !screenshot_in_progress() &&
@@ -987,11 +1029,24 @@ void rasterizer_lens_flares_submit_occlusion_tests(
 					break;
 				}
 
+#ifdef HALO_SWITCH
+				{
+					long test_index = LENS_FLARE_OCCLUSION_TEST_INDEX(lens_flare_parameters, lens_flare_index);
+
+					/* (the light's own slot, so its last result stays its own) */
+					rasterizer_occlusion_test_skip_query =
+						(unsigned long)(test_index + (long)test_frame) % (unsigned long)lens_flare_test_every() != 0;
+					lens_flare_parameters->internal__occlusion_pixels =
+						rasterizer_widget_submit_occlusion_test(&occlusion_point, occlusion_radius, test_index);
+					rasterizer_occlusion_test_skip_query = FALSE;
+				}
+#else
 				lens_flare_parameters->internal__occlusion_pixels =
 					rasterizer_widget_submit_occlusion_test(
 						&occlusion_point,
 						occlusion_radius,
 						LENS_FLARE_OCCLUSION_TEST_INDEX(lens_flare_parameters, lens_flare_index));
+#endif
 			}
 		}
 
@@ -1006,6 +1061,10 @@ void rasterizer_lens_flares_submit_occlusion_tests(
 void rasterizer_lens_flares_draw(
 	void)
 {
+#ifdef HALO_SWITCH
+	if (!lens_flares_enabled())
+		return;
+#endif
 	rasterizer_profile_begin(_rasterizer_profile_lens_flares);
 
 	if (rasterizer_debug_options.lens_flares &&

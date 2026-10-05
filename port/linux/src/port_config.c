@@ -113,6 +113,15 @@ static const struct config_setting config_settings[] =
 		"Sharpen the picture, 0.0 (off) to 1.0, adapting to the contrast already\n"
 		"there so edges do not ring. Offsets FXAA's slight softening and the\n"
 		"game's 480-line layout drawn at 720p." },
+	{ "display.lens_flares", _config_boolean, "true", "HALO_LENS_FLARES", _environment_value, _platform_switch,
+		"Lens flares and the glow around lights. Off saves the GPU tests that\n"
+		"decide whether each light is hidden, which in rooms full of lights are\n"
+		"one of the most expensive things drawn." },
+	{ "display.lens_flare_test_every", _config_integer, "2", "HALO_LENS_FLARE_TEST_EVERY", _environment_value,
+		_platform_switch,
+		"Test each light's visibility every Nth frame: 1 is every frame (the\n"
+		"original), 2 halves the cost, 3 or 4 cut it further. Flares fade over\n"
+		"several frames, so it does not show." },
 	{ "display.anisotropy", _config_integer, "4", "HALO_ANISOTROPY", _environment_value, _platform_switch,
 		"Texture sharpness at a slant (floors, walls going into the distance):\n"
 		"1 is the original look; 2, 4, 8 or 16 keep them sharper." },
