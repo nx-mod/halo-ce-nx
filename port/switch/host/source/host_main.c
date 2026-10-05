@@ -111,6 +111,8 @@ long host_read(int fd, void *buf, unsigned long count);
 long host_write_fd(int fd, const void *buf, unsigned long count);
 long host_close(int fd);
 long long host_lseek(int fd, long long offset, int whence);
+long host_unlink(const char *path);
+long host_rename(const char *from, const char *to);
 int posix_stat(const char *path, void *information);
 int posix_fstat(int descriptor, void *information);
 int posix_set_file_times(const char *path, unsigned int access_seconds, unsigned int access_nanoseconds,
@@ -170,6 +172,8 @@ static const struct host_function kHostFunctions[] = {
 	{"host_write_fd", (void *)host_write_fd},
 	{"host_close", (void *)host_close},
 	{"host_lseek", (void *)host_lseek},
+	{"host_unlink", (void *)host_unlink},
+	{"host_rename", (void *)host_rename},
 	{"posix_stat", (void *)posix_stat},
 	{"posix_fstat", (void *)posix_fstat},
 	{"posix_set_file_times", (void *)posix_set_file_times},

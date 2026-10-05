@@ -12,6 +12,7 @@ split.
 */
 
 #include <errno.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -66,4 +67,17 @@ long long host_lseek(int fd, long long offset, int whence)
 	long long result = (long long)lseek(fd, (off_t)offset, whence);
 
 	return result < 0 ? -errno : result;
+}
+
+/* the guest's unlinkat/renameat (guest_syscall.c): xbox_files.c's
+DeleteFileA and MoveFileA. Without these every delete failed, and the
+saved game code's create-over-an-old-file failed with it. */
+long host_unlink(const char *path)
+{
+	return unlink(path) < 0 ? -errno : 0;
+}
+
+long host_rename(const char *from, const char *to)
+{
+	return rename(from, to) < 0 ? -errno : 0;
 }

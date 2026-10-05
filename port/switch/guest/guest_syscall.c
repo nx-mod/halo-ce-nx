@@ -31,11 +31,16 @@ extern long host_read(int fd, void *buf, unsigned long count);
 extern long host_write_fd(int fd, const void *buf, unsigned long count);
 extern long host_close(int fd);
 extern long long host_lseek(int fd, long long offset, int whence);
+extern long host_unlink(const char *path);
+extern long host_rename(const char *from, const char *to);
 
 extern char __guest_heap_start[];
 extern char __guest_heap_end[];
 
 #define SYS_fcntl 25
+#define SYS_unlinkat 35
+#define SYS_renameat 38
+#define SYS_renameat2 276
 #define SYS_openat 56
 #define SYS_close 57
 #define SYS_lseek 62
@@ -327,6 +332,13 @@ long __guest_syscall(long long n, long long a, long long b, long long c, long lo
 		sleep_ns(ns);
 		return 0;
 	}
+	case SYS_unlinkat:
+		/* dirfd is always AT_FDCWD (paths are absolute sdmc: paths);
+		flags would be AT_REMOVEDIR for rmdir, which nothing calls */
+		return host_unlink((const char *)(uintptr_t)b);
+	case SYS_renameat:
+	case SYS_renameat2:
+		return host_rename((const char *)(uintptr_t)b, (const char *)(uintptr_t)d);
 	case SYS_madvise:
 		/* oldmalloc's free hands large free spans back (MADV_DONTNEED) on
 		every call; the memory just stays mapped here. Logging it as

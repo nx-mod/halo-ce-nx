@@ -53,9 +53,13 @@ int config_boolean(const char *name)
 	return 0;
 }
 
+/* port/linux/src/port_config.c's defaults where they aren't zero and
+matter here: audio.volume 0 is dsound_sdl.c's master volume - the mixer
+ran but every sample came out 0 */
 double config_real(const char *name)
 {
-	(void)name;
+	if (!strcmp(name, "audio.volume"))
+		return 1.0;
 	return 0.0;
 }
 
@@ -74,7 +78,9 @@ const char *config_string(const char *name)
 
 long config_integer(const char *name)
 {
-	(void)name;
+	/* -1 is off; 0 would trace the first frame's every draw */
+	if (!strcmp(name, "debug.gpu_trace_frame"))
+		return -1;
 	return 0;
 }
 
