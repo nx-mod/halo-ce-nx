@@ -111,6 +111,7 @@ long host_create_thread(unsigned int guest_entry, unsigned int guest_arg, unsign
 	struct host_thread_args *args;
 	Result rc;
 	int index;
+	int cpuid;
 
 	for (index = 0; index < MAXIMUM_HOST_THREADS; index++)
 		if (!s_threads_used[index])
@@ -123,7 +124,31 @@ long host_create_thread(unsigned int guest_entry, unsigned int guest_arg, unsign
 	args->guest_entry = (void (*)(void *))(uintptr_t)guest_entry;
 	args->guest_arg = (void *)(uintptr_t)guest_arg;
 	args->tls_block = (void *)(uintptr_t)tls_block;
-	rc = threadCreate(&s_threads[index], host_thread_trampoline, args, NULL, stack_size, 0x3B, -2);
+	/* Same priority as the creator, on a different core. The game's
+	waits (cache_file_block_until_not_busy's SleepEx(0) loop and the
+	like) spin on the creating thread; a lower-priority worker on the
+	same core would never run, so the wait would never end. */
+	{
+		s32 priority = 0x2C;
+		u64 core_mask = 0;
+		int current = svcGetCurrentProcessorNumber();
+		int core;
+
+		svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
+		svcGetInfo(&core_mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0);
+		cpuid = -2;
+		for (core = 0; core < 3; core++)
+		{
+			int candidate = (current + 1 + index + core) % 3;
+
+			if (candidate != current && (core_mask & (1ULL << candidate)))
+			{
+				cpuid = candidate;
+				break;
+			}
+		}
+		rc = threadCreate(&s_threads[index], host_thread_trampoline, args, NULL, stack_size, priority, cpuid);
+	}
 	if (R_FAILED(rc))
 	{
 		extern void logf_both(const char *fmt, ...);
@@ -145,7 +170,7 @@ long host_create_thread(unsigned int guest_entry, unsigned int guest_arg, unsign
 		extern void logf_both(const char *fmt, ...);
 		void *mirror = s_threads[index].stack_mirror;
 
-		logf_both("host_create_thread: created, stack_mirror=%p (%s 4GB)\n", mirror,
+		logf_both("host_create_thread: created on core %d, stack_mirror=%p (%s 4GB)\n", cpuid, mirror,
 			(uintptr_t)mirror < 0x100000000ULL ? "below" : "NOT BELOW - guest 32-bit pointers to this stack WILL be corrupt");
 	}
 	return 1;

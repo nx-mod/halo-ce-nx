@@ -24,3 +24,12 @@ void __guest_runtime_init(void)
 	libc.auxv = empty_auxv;
 	libc.page_size = 4096;
 }
+
+/* pthread_create normally sets this; switch_xbox_threads.c's CreateThread
+bypasses it, so it calls this instead. Without it oldmalloc's lock() is
+a no-op and real threads (cache worker, audio, input) share the heap
+unlocked. */
+void __guest_enable_locks(void)
+{
+	libc.need_locks = 1;
+}

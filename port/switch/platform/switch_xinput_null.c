@@ -139,9 +139,12 @@ int __stdcall XGetDeviceChanges(struct _XPP_DEVICE_TYPE *device_type, unsigned l
 	return 0;
 }
 
+/* no debug keyboard: the queue is always empty. 0 (ERROR_SUCCESS) here
+hung input_initialize - input_update_keyboard_devices drains the queue
+with while (XInputDebugGetKeystroke(...) == ERROR_SUCCESS) */
 unsigned long __stdcall XInputDebugGetKeystroke(struct _XINPUT_DEBUG_KEYSTROKE *)
 {
-	return 0;
+	return 38; /* ERROR_HANDLE_EOF, as port/linux/src/xinput_sdl.c */
 }
 
 unsigned long __stdcall XInputDebugInitKeyboardQueue(struct _XINPUT_DEBUG_KEYQUEUE_PARAMETERS *)

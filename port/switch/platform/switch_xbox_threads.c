@@ -93,6 +93,11 @@ void *__stdcall CreateThread(void *security_attributes, unsigned long stack_size
 	libnx actually chose - see that file's own comment for why this
 	is expected to still land safely sub-4 GB despite the address no
 	longer being something this file controls. */
+	{
+		extern void __guest_enable_locks(void);
+
+		__guest_enable_locks();
+	}
 	tls_block = calloc(1, 512);
 	if (!tls_block || !host_create_thread(
 		(unsigned int)(uintptr_t)guest_thread_entry,

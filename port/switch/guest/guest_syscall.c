@@ -49,6 +49,7 @@ extern char __guest_heap_end[];
 #define SYS_mmap 222
 #define SYS_exit 93
 #define SYS_exit_group 94
+#define SYS_futex 98
 
 #define ENOMEM 12
 #define ENOSYS 38
@@ -153,6 +154,12 @@ long __guest_syscall(long long n, long long a, long long b, long long c, long lo
 		convenient shortcut. */
 		host_lseek((int)a, (long long)d, 0 /* SEEK_SET */);
 		return host_write_fd((int)a, (const void *)(uintptr_t)b, (unsigned long)c);
+	case SYS_futex:
+		/* musl's __wait/__wake (malloc's lock under contention). No real
+		futex: a wait returns at once and __wait's caller re-checks the
+		lock word, so contention becomes a short spin across cores -
+		fine for malloc's brief critical sections. */
+		return 0;
 	case SYS_exit:
 	case SYS_exit_group:
 		host_log("__guest_syscall: guest called exit()");
