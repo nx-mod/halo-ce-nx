@@ -176,7 +176,7 @@ long host_create_thread(unsigned int guest_entry, unsigned int guest_arg, unsign
 	return 1;
 }
 
-#define MAXIMUM_HOST_EVENTS 16
+#define MAXIMUM_HOST_EVENTS 64
 static UEvent s_events[MAXIMUM_HOST_EVENTS];
 static int s_events_used[MAXIMUM_HOST_EVENTS];
 

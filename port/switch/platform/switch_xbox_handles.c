@@ -50,7 +50,9 @@ struct platform_handle *platform_handle_get(HANDLE handle, long type)
 
 	/* GetCurrentProcess() and GetCurrentThread() are the pseudo handles -1
 	and -2; any other value in the top page cannot be a heap pointer */
-	if (!result || (unsigned long)handle >= 0xfffff000UL ||
+	/* below 0x1000: switch_xbox_threads.c's event/mutex handles (small
+	1-based indices into host_threads.c's table), never heap pointers */
+	if ((unsigned long)handle < 0x1000UL || (unsigned long)handle >= 0xfffff000UL ||
 		result->signature != PLATFORM_HANDLE_SIGNATURE ||
 		(type && result->type != type))
 	{

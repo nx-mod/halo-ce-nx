@@ -98,7 +98,19 @@ void platform_video_drawable_size(int *width, int *height)
 		ok = eglQuerySurface(s_display, s_surface, EGL_WIDTH, &w) &&
 			eglQuerySurface(s_display, s_surface, EGL_HEIGHT, &h);
 	}
-	logf_both("platform_video_drawable_size: %dx%d (query %s)", (int)w, (int)h, ok ? "ok" : "FAILED");
+	{
+		/* asked every frame (halo_screen_commit): log changes only */
+		static EGLint last_w = -1, last_h = -1;
+		static int last_ok = -1;
+
+		if (w != last_w || h != last_h || ok != last_ok)
+		{
+			logf_both("platform_video_drawable_size: %dx%d (query %s)\n", (int)w, (int)h, ok ? "ok" : "FAILED");
+			last_w = w;
+			last_h = h;
+			last_ok = ok;
+		}
+	}
 	if (!ok || w <= 0 || h <= 0)
 	{
 		w = 1280;

@@ -133,6 +133,31 @@ void *__stdcall CreateEventA(void *security_attributes, int manual_reset, int in
 	return (void *)(uintptr_t)handle;
 }
 
+/* A mutex is an auto-reset event that starts signaled: WaitForSingleObject
+consumes the signal (acquire), ReleaseMutex puts it back. Not recursive,
+unlike Win32 - every caller (thread_win32.c's take_mutex, used by saved
+game files and bungie_net) waits with a timeout and checks the result,
+so a recursive take times out instead of deadlocking. */
+void *__stdcall CreateMutexA(void *security_attributes, int initial_owner, const char *name)
+{
+	long handle;
+
+	(void)security_attributes;
+	(void)name;
+	handle = host_event_create(1);
+	if (!handle)
+		return 0;
+	if (!initial_owner)
+		host_event_signal(handle);
+	return (void *)(uintptr_t)handle;
+}
+
+int __stdcall ReleaseMutex(void *mutex)
+{
+	host_event_signal((long)(uintptr_t)mutex);
+	return 1;
+}
+
 int __stdcall SetEvent(void *event)
 {
 	host_event_signal((long)(uintptr_t)event);

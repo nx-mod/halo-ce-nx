@@ -78,6 +78,21 @@ long config_integer(const char *name)
 	return 0;
 }
 
+/* d3d8_gl.c's screen_mode_choose: the display the game fills. From it the
+game picks its layout width (852 for 16:9 at its fixed 480 lines) and the
+scale its screen targets are drawn at (1.5x for 1280x720) - without this
+it drew a 640x480 picture pillarboxed in the middle of the screen. */
+int platform_screen_mode(long *width, long *height)
+{
+	extern void platform_video_drawable_size(int *width, int *height);
+	int w = 0, h = 0;
+
+	platform_video_drawable_size(&w, &h);
+	*width = w;
+	*height = h;
+	return w > 0 && h > 0;
+}
+
 /* source/rasterizer/xbox/rasterizer_xbox_decals.c - the real GLES3
 backend (switch_d3d8_null.c's successor) doesn't have an equivalent for
 this contiguous-stream-attribute trick */

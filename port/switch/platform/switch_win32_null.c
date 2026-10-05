@@ -61,15 +61,6 @@ int __stdcall SwitchToThread(void)
 	return 0;
 }
 
-void *__stdcall CreateMutexA(void *, int, const char *)
-{
-	return 0;
-}
-
-int __stdcall ReleaseMutex(void *)
-{
-	return 0;
-}
 
 /* real now (not a null stub): guest_xbox_handles.c's
 platform_set_last_error_from_errno (PORTING.md's "real file I/O"

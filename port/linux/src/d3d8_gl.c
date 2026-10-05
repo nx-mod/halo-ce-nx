@@ -87,7 +87,10 @@ static long ui_offset;
 
 static void screen_mode_choose(long *width, float scale[2])
 {
-#if defined(HALO_ANDROID) || defined(HALO_SWITCH)
+	/* Switch takes the desktop path: platform_screen_mode
+	(port/switch/guest/guest_platform_stubs.c) reports the 1280x720
+	surface, so the game lays out 852x480 and draws it at 1.5x - 720p */
+#if defined(HALO_ANDROID)
 	/* display.screen_width, or 0 for the display's shape, which the app
 	passes (port/android/host/host_main.c) */
 	const char *display = getenv("HALO_DISPLAY_WIDTH");
