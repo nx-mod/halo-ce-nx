@@ -4,9 +4,10 @@
 #include <GLES2/gl2ext.h>
 #include <string.h>
 
-/* hand-written in host_shader_cache.c: the shader program cache on the
-SD card (deferred compiles, binaries loaded instead of linked) and
-glShaderSource's unwrapping of the guest's widened string pointers */
+/* hand-written in host_shader_cache.c: the shader pack (programs
+compiled ahead on another core, the game's program names mapped to
+them, deferred compiles) and glShaderSource's unwrapping of the
+guest's widened string pointers */
 extern char hostgl_glShaderSource[];
 extern char hostgl_glCompileShader[];
 extern char hostgl_glGetShaderiv[];
@@ -15,6 +16,10 @@ extern char hostgl_glCreateProgram[];
 extern char hostgl_glAttachShader[];
 extern char hostgl_glBindAttribLocation[];
 extern char hostgl_glLinkProgram[];
+extern char hostgl_glGetProgramiv[];
+extern char hostgl_glGetProgramInfoLog[];
+extern char hostgl_glUseProgram[];
+extern char hostgl_glGetUniformLocation[];
 
 static const struct { const char *name; void *function; } kHostGlFunctions[] = {
 	{"hostgl_glGetIntegerv", (void *)glGetIntegerv},
@@ -102,10 +107,10 @@ static const struct { const char *name; void *function; } kHostGlFunctions[] = {
 	{"hostgl_glAttachShader", (void *)hostgl_glAttachShader},
 	{"hostgl_glBindAttribLocation", (void *)hostgl_glBindAttribLocation},
 	{"hostgl_glLinkProgram", (void *)hostgl_glLinkProgram},
-	{"hostgl_glGetProgramiv", (void *)glGetProgramiv},
-	{"hostgl_glGetProgramInfoLog", (void *)glGetProgramInfoLog},
-	{"hostgl_glUseProgram", (void *)glUseProgram},
-	{"hostgl_glGetUniformLocation", (void *)glGetUniformLocation},
+	{"hostgl_glGetProgramiv", (void *)hostgl_glGetProgramiv},
+	{"hostgl_glGetProgramInfoLog", (void *)hostgl_glGetProgramInfoLog},
+	{"hostgl_glUseProgram", (void *)hostgl_glUseProgram},
+	{"hostgl_glGetUniformLocation", (void *)hostgl_glGetUniformLocation},
 	{"hostgl_glUniform1i", (void *)glUniform1i},
 	{"hostgl_glUniform1iv", (void *)glUniform1iv},
 	{"hostgl_glUniform1f", (void *)glUniform1f},

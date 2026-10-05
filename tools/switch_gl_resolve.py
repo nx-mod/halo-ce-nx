@@ -16,6 +16,7 @@ import sys
 CACHE_FUNCTIONS = (
     "hostgl_glShaderSource", "hostgl_glCompileShader", "hostgl_glGetShaderiv", "hostgl_glGetShaderInfoLog",
     "hostgl_glCreateProgram", "hostgl_glAttachShader", "hostgl_glBindAttribLocation", "hostgl_glLinkProgram",
+    "hostgl_glGetProgramiv", "hostgl_glGetProgramInfoLog", "hostgl_glUseProgram", "hostgl_glGetUniformLocation",
 )
 
 
@@ -30,9 +31,10 @@ def main():
         "#include <GLES2/gl2ext.h>",
         "#include <string.h>",
         "",
-        "/* hand-written in host_shader_cache.c: the shader program cache on the",
-        "SD card (deferred compiles, binaries loaded instead of linked) and",
-        "glShaderSource's unwrapping of the guest's widened string pointers */",
+        "/* hand-written in host_shader_cache.c: the shader pack (programs",
+        "compiled ahead on another core, the game's program names mapped to",
+        "them, deferred compiles) and glShaderSource's unwrapping of the",
+        "guest's widened string pointers */",
         *[f"extern char {n}[];" for n in CACHE_FUNCTIONS],
         "",
         "static const struct { const char *name; void *function; } kHostGlFunctions[] = {",

@@ -35,6 +35,7 @@ startup/error logging first.
 #include "host_loading_text.h"
 
 void platform_video_drawable_size(int *width, int *height);
+void host_shader_pack_start(EGLDisplay display, EGLConfig config, EGLContext game_context);
 
 static EGLDisplay s_display = EGL_NO_DISPLAY;
 static EGLSurface s_surface = EGL_NO_SURFACE;
@@ -111,6 +112,8 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 		return 0;
 	if (!eglMakeCurrent(s_display, s_surface, s_surface, s_context))
 		return 0;
+	/* the shader pack's worker compiles on core 2 from here on */
+	host_shader_pack_start(s_display, config, s_context);
 	/* the driver's own account of any GL call it rejects - the renderer
 	never checks glGetError, so a rejected texture format or vertex
 	attribute fails silently otherwise */
