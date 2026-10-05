@@ -109,6 +109,137 @@ unsigned long long vita_host_time_us(void)
 	return frequency ? (tick * 1000000ULL) / frequency : 0;
 }
 
+/* musl's strtod parses through long double, which on this ILP32 ABI is
+quad precision done in software, and there is no ILP32 libgcc to do it
+(guest_softfloat_stubs.c traps instead): the settings file's first real
+number ("1.0") crashed the game at once. These parse straight into a
+double, exactly for the short decimals settings hold (a mantissa below
+2^53 scaled by an exact power of ten), and as closely as doubles allow
+beyond. Defining strtod and strtof here keeps musl's strtod.o, and its
+long double path, out of the link. */
+static double power_of_ten(int exponent)
+{
+	static const double exact[] = {
+		1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11,
+		1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22,
+	};
+	double result = 1.0;
+
+	while (exponent > 22)
+	{
+		result *= 1e22;
+		exponent -= 22;
+	}
+	return result * exact[exponent];
+}
+
+static int lower(int c)
+{
+	return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+}
+
+static int starts_with_word(const char *text, const char *word)
+{
+	while (*word)
+	{
+		if (lower((unsigned char)*text++) != *word++)
+			return 0;
+	}
+	return 1;
+}
+
+double strtod(const char *text, char **end)
+{
+	const char *at = text;
+	unsigned long long mantissa = 0;
+	int digits = 0, significant = 0, exponent = 0, negative = 0;
+	double value;
+
+	while (*at == ' ' || *at == '\t' || *at == '\n' || *at == '\r' || *at == '\f' || *at == '\v')
+		at++;
+	if (*at == '+' || *at == '-')
+		negative = *at++ == '-';
+	if (starts_with_word(at, "inf"))
+	{
+		at += starts_with_word(at, "infinity") ? 8 : 3;
+		if (end)
+			*end = (char *)at;
+		return negative ? -__builtin_inf() : __builtin_inf();
+	}
+	if (starts_with_word(at, "nan"))
+	{
+		if (end)
+			*end = (char *)(at + 3);
+		return __builtin_nan("");
+	}
+	for (; *at >= '0' && *at <= '9'; at++, digits++)
+	{
+		if (significant < 19)
+		{
+			mantissa = mantissa * 10 + (unsigned long long)(*at - '0');
+			if (mantissa)
+				significant++;
+		}
+		else
+			exponent++;
+	}
+	if (*at == '.')
+	{
+		for (at++; *at >= '0' && *at <= '9'; at++, digits++)
+		{
+			if (significant < 19)
+			{
+				mantissa = mantissa * 10 + (unsigned long long)(*at - '0');
+				exponent--;
+				if (mantissa)
+					significant++;
+			}
+		}
+	}
+	if (!digits)
+	{
+		if (end)
+			*end = (char *)text;
+		return 0.0;
+	}
+	if (*at == 'e' || *at == 'E')
+	{
+		const char *mark = at++;
+		int sign = 1, power = 0, power_digits = 0;
+
+		if (*at == '+' || *at == '-')
+			sign = *at++ == '-' ? -1 : 1;
+		for (; *at >= '0' && *at <= '9'; at++, power_digits++)
+		{
+			if (power < 10000)
+				power = power * 10 + (*at - '0');
+		}
+		if (power_digits)
+			exponent += sign * power;
+		else
+			at = mark;
+	}
+	if (end)
+		*end = (char *)at;
+	value = (double)mantissa;
+	if (exponent > 308 + 19)
+		value = mantissa ? __builtin_inf() : 0.0;
+	else if (exponent < -(324 + 19))
+		value = 0.0;
+	else if (exponent >= 0)
+		value *= power_of_ten(exponent);
+	else if (exponent >= -308)
+		value /= power_of_ten(-exponent);
+	else
+		value = value / power_of_ten(308) / power_of_ten(-exponent - 308);
+	return negative ? -value : value;
+}
+
+float strtof(const char *text, char **end)
+{
+	return (float)strtod(text, end);
+}
+
 /* main.c's frame cap without interpolation (a frame per 30 Hz tick, not the
 same picture again), which it only applies when this exists */
 void vita_host_sleep_us(unsigned long microseconds)
