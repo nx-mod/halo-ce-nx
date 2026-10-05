@@ -23,4 +23,17 @@ best evidence available for what this implementation actually checks. */
 #define UTIME_NOW -2L
 #define UTIME_OMIT -1L
 
+/* libnx's SD card driver has no chmod (ENOSYS), and FAT has no Unix
+permission bits to set. posix_set_read_only - SetFileAttributesA, which
+the game's file_delete calls before DeleteFileA - failed every time,
+so no delete was ever attempted (error 0x1f, ERROR_GEN_FAILURE). */
+#include <sys/stat.h>
+static int switch_chmod(const char *path, mode_t mode)
+{
+	(void)path;
+	(void)mode;
+	return 0;
+}
+#define chmod switch_chmod
+
 #include "../../../linux/src/posix_files.c"

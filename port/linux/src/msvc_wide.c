@@ -181,8 +181,13 @@ wchar_t *msvc_wcspbrk(const wchar_t *string, const wchar_t *characters)
 
 wchar_t *msvc_wcstok(wchar_t *string, const wchar_t *delimiters)
 {
-	/* MSVC keeps the tokenizer state per thread */
+	/* MSVC keeps the tokenizer state per thread. Not on Switch: its guest
+	has no TLS segment, so __thread would address the host's thread area */
+#ifdef HALO_SWITCH
+	static wchar_t *next;
+#else
 	static __thread wchar_t *next;
+#endif
 	wchar_t *token;
 
 	if (string)

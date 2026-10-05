@@ -31,6 +31,15 @@ uintptr_t __guest_get_tp(void)
 	return (uintptr_t)host_get_guest_tp();
 }
 
+/* the last 64 bytes of the 512-byte block (struct pthread is 112 bytes,
+at the start): ../include/switch_guest_thread.h */
+#include "../include/switch_guest_thread.h"
+
+struct guest_thread_port_data *__guest_thread_port_data(void)
+{
+	return (struct guest_thread_port_data *)((unsigned char *)host_get_guest_tp() + 448);
+}
+
 /* called once, from __guest_entry, before any musl function that might
 need __get_tp (match_malloc et al. - see guest_runtime_init.c, called
 right alongside it for the same reason). Every other real thread sets

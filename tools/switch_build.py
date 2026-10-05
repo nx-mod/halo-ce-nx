@@ -326,7 +326,7 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
     # trampolines (guest_imports_s) - plain ILP32 C/asm, no game ABI and
     # no platform-layer winsock dance, just devkitPro's real GLES3/GLES2
     # headers for the former's own prototypes.
-    guest_gl_cflags = " ".join([abi, "-std=gnu11", "-w", f"-I{SWITCH_PORTLIBS_INCLUDE}", musl_includes])
+    guest_gl_cflags = " ".join([abi, "-std=gnu11", "-w", "-DGUEST_GL_TLS=", f"-I{SWITCH_PORTLIBS_INCLUDE}", musl_includes])
     guest_gl_obj = obj_dir / "guest_gl.o"
     objects.append(guest_gl_obj)
     n.build(outputs=guest_gl_obj, rule="switch_cc", inputs=guest_gl_c, implicit=[MUSL_LIB],

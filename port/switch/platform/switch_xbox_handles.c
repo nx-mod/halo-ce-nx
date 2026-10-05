@@ -120,11 +120,15 @@ struct platform_apc
 	void *context[3];
 };
 
-static struct platform_apc *platform_apc_head;
-static struct platform_apc *platform_apc_tail;
+/* per thread, as on Windows (and port/linux/src/xbox_kernel.c's
+__thread queue): a completion runs on the thread that issued the I/O,
+at its next alertable wait. One shared, unlocked list let the cache
+worker and the main thread corrupt it and run each other's routines. */
+#include "../include/switch_guest_thread.h"
 
 void platform_queue_apc(platform_apc_routine routine, void *context0, void *context1, void *context2)
 {
+	struct guest_thread_port_data *thread = __guest_thread_port_data();
 	struct platform_apc *apc = calloc(1, sizeof(*apc));
 
 	if (!apc)
@@ -133,24 +137,25 @@ void platform_queue_apc(platform_apc_routine routine, void *context0, void *cont
 	apc->context[0] = context0;
 	apc->context[1] = context1;
 	apc->context[2] = context2;
-	if (platform_apc_tail)
-		platform_apc_tail->next = apc;
+	if (thread->apc_tail)
+		((struct platform_apc *)thread->apc_tail)->next = apc;
 	else
-		platform_apc_head = apc;
-	platform_apc_tail = apc;
+		thread->apc_head = apc;
+	thread->apc_tail = apc;
 }
 
 long platform_run_apcs(void)
 {
+	struct guest_thread_port_data *thread = __guest_thread_port_data();
 	long count = 0;
 
-	while (platform_apc_head)
+	while (thread->apc_head)
 	{
-		struct platform_apc *apc = platform_apc_head;
+		struct platform_apc *apc = thread->apc_head;
 
-		platform_apc_head = apc->next;
-		if (!platform_apc_head)
-			platform_apc_tail = NULL;
+		thread->apc_head = apc->next;
+		if (!thread->apc_head)
+			thread->apc_tail = NULL;
 		apc->routine(apc->context[0], apc->context[1], apc->context[2]);
 		free(apc);
 		count++;

@@ -62,23 +62,20 @@ int __stdcall SwitchToThread(void)
 }
 
 
-/* real now (not a null stub): guest_xbox_handles.c's
-platform_set_last_error_from_errno (PORTING.md's "real file I/O"
-milestone) needs callers to actually be able to read back what it
-set - xbox_files.c's own CreateFileA etc depend on that, not just on
-the open/read/etc call's own return value. No real threading here
-(guest_pthread_stubs.c), so a single guest-wide variable is exactly as
-correct as the real thing's __thread storage would be. */
-static unsigned long switch_last_error;
+/* per thread, as on Windows: the cache worker, the UI's filesystem check
+thread and the main thread all do file I/O, and a shared value let one
+thread's error make another's success look like a failure (or the other
+way round - CreateFileA's ERROR_ALREADY_EXISTS is read straight after) */
+#include "../include/switch_guest_thread.h"
 
 unsigned long __stdcall GetLastError(void)
 {
-	return switch_last_error;
+	return __guest_thread_port_data()->last_error;
 }
 
 void __stdcall SetLastError(unsigned long error)
 {
-	switch_last_error = error;
+	__guest_thread_port_data()->last_error = error;
 }
 
 /* real now (not null stubs): AArch64's own CNTPCT_EL0/CNTFRQ_EL0
