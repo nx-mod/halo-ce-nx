@@ -2842,6 +2842,14 @@ enum
 	_mirror_page_volatile
 };
 
+#ifdef HALO_SWITCH
+/* vertex data is checked every frame (switch_memory_watch.c) */
+unsigned long memory_watch_generation_every_frame(unsigned long address, unsigned long size);
+#define MIRROR_WATCH_GENERATION memory_watch_generation_every_frame
+#else
+#define MIRROR_WATCH_GENERATION memory_watch_generation
+#endif
+
 static struct
 {
 	GLuint buffers[MIRROR_SEGMENT_COUNT];
@@ -2874,7 +2882,7 @@ static BOOL mirror_refresh(unsigned long first, unsigned long last)
 	for (page = first; page < last; page++)
 	{
 		BOOL written = mirror.state[page] == _mirror_page_present &&
-			memory_watch_generation(PLATFORM_CONTIGUOUS_BASE + page * MIRROR_PAGE_SIZE, MIRROR_PAGE_SIZE) >
+			MIRROR_WATCH_GENERATION(PLATFORM_CONTIGUOUS_BASE + page * MIRROR_PAGE_SIZE, MIRROR_PAGE_SIZE) >
 			mirror.generation[page];
 
 		stale[page - first] = mirror.state[page] != _mirror_page_present || written;
@@ -2924,7 +2932,7 @@ static BOOL mirror_refresh(unsigned long first, unsigned long last)
 		memory_watch_protect(address, size);
 		for (; page < run; page++)
 		{
-			mirror.generation[page] = memory_watch_generation(PLATFORM_CONTIGUOUS_BASE + page * MIRROR_PAGE_SIZE,
+			mirror.generation[page] = MIRROR_WATCH_GENERATION(PLATFORM_CONTIGUOUS_BASE + page * MIRROR_PAGE_SIZE,
 				MIRROR_PAGE_SIZE);
 			mirror.state[page] = _mirror_page_present;
 		}
@@ -2993,7 +3001,7 @@ static BOOL mirror_range(unsigned long address, unsigned long size, GLuint *buff
 				newest = mirror.generation[page];
 		}
 	}
-	if (!present || memory_watch_generation(address, size) > oldest)
+	if (!present || MIRROR_WATCH_GENERATION(address, size) > oldest)
 	{
 		if (!mirror_refresh(first, last))
 			return FALSE;
@@ -3657,10 +3665,22 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 	if (screenshot_every < 0)
 		screenshot_every = config_integer("debug.screenshot_every");
 
+#ifdef HALO_SWITCH
+	/* the first frame drawn after a map loads (the menu, a new game, a
+	saved game) is not shown: it came out in wrong colours, and with the
+	next frame half a second away (shaders compiling) it stayed up as a
+	whole-screen "negative". The screen keeps what it had. */
+	extern unsigned long halo_map_generation;
+	static unsigned long shown_generation;
+	BOOL hide_frame = shown_generation != halo_map_generation;
+
+	shown_generation = halo_map_generation;
+#endif
 	if (device.gl_ready)
 	{
 		struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
 		int window_width, window_height, width, height, x, y;
+		GLuint read_framebuffer;
 
 		if (trace_frame())
 			platform_log("present back buffer %08lx texture %u", (unsigned long)device.back_buffer.Data,
@@ -3679,16 +3699,26 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		}
 		x = (window_width - width) / 2;
 		y = (window_height - height) / 2;
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-		glDisable(GL_SCISSOR_TEST);
-		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer_get(back_buffer->target.texture, 0));
-		/* row 0 of the render target is the top of the picture */
-		glBlitFramebuffer(0, 0, (GLint)back_buffer->target.gl_width, (GLint)back_buffer->target.gl_height,
-			x, y + height, x + width, y, GL_COLOR_BUFFER_BIT, GL_LINEAR);
-		platform_video_swap();
+		/* framebuffer_get binds a framebuffer it creates as both read and
+		draw: on the first present that undid the window's draw binding,
+		the blit had one buffer as both ends (a GL error), and the first
+		picture - the loading screen - never reached the window */
+		read_framebuffer = framebuffer_get(back_buffer->target.texture, 0);
+#ifdef HALO_SWITCH
+		if (!hide_frame)
+#endif
+		{
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+			glDisable(GL_SCISSOR_TEST);
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, read_framebuffer);
+			/* row 0 of the render target is the top of the picture */
+			glBlitFramebuffer(0, 0, (GLint)back_buffer->target.gl_width, (GLint)back_buffer->target.gl_height,
+				x, y + height, x + width, y, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+			platform_video_swap();
+		}
 		xgpu_gl_state_invalidate();
 		xgpu_texture_cache_begin_frame();
 #if defined(HALO_ANDROID) || defined(HALO_SWITCH)

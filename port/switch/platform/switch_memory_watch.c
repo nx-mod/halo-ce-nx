@@ -16,7 +16,9 @@ when the hash does. A page is hashed at most once a frame, and less
 often while it keeps not changing (every 1 or 2 frames): vertex
 data the game rewrites each frame stays checked every frame, static
 textures cost almost nothing, and a game write to a page that had been
-static is still seen within 2 frames. Writes the host makes (file reads
+static is still seen within 2 frames. Vertex data never backs off
+(memory_watch_generation_every_frame): one stale frame of it is a decal
+drawn late or in the wrong place. Writes the host makes (file reads
 into guest memory, xbox_files.c) force a recheck at once, as on the Vita
 - which, unlike this, never sees writes made by game code.
 */
@@ -33,6 +35,7 @@ static unsigned long page_generation[WATCH_PAGE_COUNT];
 static unsigned long long page_hash[WATCH_PAGE_COUNT];
 static unsigned long page_next_check[WATCH_PAGE_COUNT];
 static unsigned char page_interval_shift[WATCH_PAGE_COUNT];
+static unsigned long page_checked_frame[WATCH_PAGE_COUNT];
 static unsigned long watch_serial = 1;
 static unsigned long watch_frame = 1;
 
@@ -74,7 +77,7 @@ void memory_watch_protect(unsigned long address, unsigned long size)
 	(void)size;
 }
 
-unsigned long memory_watch_generation(unsigned long address, unsigned long size)
+static unsigned long generation_of(unsigned long address, unsigned long size, int every_frame)
 {
 	unsigned long first, last, page, newest = 0;
 
@@ -82,11 +85,12 @@ unsigned long memory_watch_generation(unsigned long address, unsigned long size)
 		return 0;
 	for (page = first; page <= last; page++)
 	{
-		if (page_next_check[page] <= watch_frame)
+		if (page_next_check[page] <= watch_frame || (every_frame && page_checked_frame[page] != watch_frame))
 		{
 			unsigned long long hash = hash_page(
 				(const unsigned long long *)(PLATFORM_CONTIGUOUS_BASE + page * WATCH_PAGE_SIZE));
 
+			page_checked_frame[page] = watch_frame;
 			if (hash != page_hash[page] || !page_generation[page])
 			{
 				page_hash[page] = hash;
@@ -103,6 +107,20 @@ unsigned long memory_watch_generation(unsigned long address, unsigned long size)
 			newest = page_generation[page];
 	}
 	return newest;
+}
+
+unsigned long memory_watch_generation(unsigned long address, unsigned long size)
+{
+	return generation_of(address, size, 0);
+}
+
+/* the same, but no page backs off: hashed once every frame it is asked
+about. For vertex data (d3d8_gl.c's mirror): a decal written into a page
+that had backed off was drawn from the old contents for a frame - late,
+missing, or briefly somewhere else while turning */
+unsigned long memory_watch_generation_every_frame(unsigned long address, unsigned long size)
+{
+	return generation_of(address, size, 1);
 }
 
 unsigned long memory_watch_serial(void)
