@@ -32,6 +32,10 @@ startup/error logging first.
 #include <EGL/egl.h>
 #include <GLES3/gl32.h>
 
+#include "host_loading_text.h"
+
+void platform_video_drawable_size(int *width, int *height);
+
 static EGLDisplay s_display = EGL_NO_DISPLAY;
 static EGLSurface s_surface = EGL_NO_SURFACE;
 static EGLContext s_context = EGL_NO_CONTEXT;
@@ -76,6 +80,16 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 		return 0;
 	if (!eglMakeCurrent(s_display, s_surface, s_surface, s_context))
 		return 0;
+	{
+		int w = 0, h = 0;
+
+		/* a black frame with the loading text, up until the game presents */
+		platform_video_drawable_size(&w, &h);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		host_loading_text_draw(w, h);
+		eglSwapBuffers(s_display, s_surface);
+	}
 	return 1;
 }
 
@@ -138,6 +152,12 @@ void platform_video_swap(void)
 	real rendering bug by description alone ("no text"), but a totally
 	different fix. Logged, not fatal: only the first few, so a
 	persistent failure doesn't spam host.log for the rest of the run. */
+	{
+		int w = 0, h = 0;
+
+		platform_video_drawable_size(&w, &h);
+		host_loading_text_draw(w, h);
+	}
 	if (!eglSwapBuffers(s_display, s_surface) && failure_count < 5)
 	{
 		failure_count++;

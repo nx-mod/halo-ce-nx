@@ -41,6 +41,7 @@ extern char __guest_heap_end[];
 #define SYS_lseek 62
 #define SYS_read 63
 #define SYS_write 64
+#define SYS_readv 65
 #define SYS_writev 66
 #define SYS_pread64 67
 #define SYS_pwrite64 68
@@ -62,12 +63,41 @@ struct guest_iovec
 	uint32_t iov_len;
 };
 
+/* Regions given back by munmap. oldmalloc mmaps every large allocation
+on its own and munmaps it on free, with the same page-rounded length;
+without reuse every freed large block leaked (and the 32 MB heap ran
+out a few seconds into the main loop). */
+#define MAXIMUM_FREE_REGIONS 256
+static struct { uintptr_t base, size; } free_regions[MAXIMUM_FREE_REGIONS];
+static int free_region_count;
+
+static void remove_free_region(int index)
+{
+	free_regions[index] = free_regions[--free_region_count];
+}
+
 static long do_mmap(long long length)
 {
 	uintptr_t aligned = (length + 0xfff) & ~(uintptr_t)0xfff;
+	int i;
 
 	if (!heap_cursor)
 		heap_cursor = (uintptr_t)__guest_heap_start;
+	for (i = 0; i < free_region_count; i++)
+	{
+		if (free_regions[i].size >= aligned)
+		{
+			uintptr_t result = free_regions[i].base;
+
+			free_regions[i].base += aligned;
+			free_regions[i].size -= aligned;
+			if (!free_regions[i].size)
+				remove_free_region(i);
+			/* anonymous mmap is zero-filled; oldmalloc's calloc relies on it */
+			__builtin_memset((void *)result, 0, aligned);
+			return (long)result;
+		}
+	}
 	if (heap_cursor + aligned > (uintptr_t)__guest_heap_end)
 	{
 		host_log("__guest_syscall: mmap: guest heap exhausted (see guest.ld's HEAP_SIZE)");
@@ -78,14 +108,81 @@ static long do_mmap(long long length)
 	return (long)result;
 }
 
+static long do_munmap(uintptr_t base, long long length)
+{
+	uintptr_t size = (length + 0xfff) & ~(uintptr_t)0xfff;
+	int i;
+
+	if (base < (uintptr_t)__guest_heap_start || base + size > heap_cursor)
+		return 0;
+	/* merge with free neighbours */
+	for (i = 0; i < free_region_count; )
+	{
+		if (free_regions[i].base + free_regions[i].size == base)
+		{
+			base = free_regions[i].base;
+			size += free_regions[i].size;
+			remove_free_region(i);
+		}
+		else if (base + size == free_regions[i].base)
+		{
+			size += free_regions[i].size;
+			remove_free_region(i);
+		}
+		else
+			i++;
+	}
+	if (base + size == heap_cursor)
+		heap_cursor = base;
+	else if (free_region_count < MAXIMUM_FREE_REGIONS)
+	{
+		free_regions[free_region_count].base = base;
+		free_regions[free_region_count].size = size;
+		free_region_count++;
+	}
+	return 0;
+}
+
 long __guest_syscall(long long n, long long a, long long b, long long c, long long d, long long e, long long f)
 {
 	switch (n)
 	{
 	case SYS_mmap:
-		return do_mmap(b);
 	case SYS_munmap:
-		return 0; /* the bump allocator never frees */
+	{
+		/* oldmalloc calls these outside its own locks, from every real
+		thread (cache worker, audio, input, main) */
+		static int heap_lock;
+		long result;
+
+		while (__atomic_exchange_n(&heap_lock, 1, __ATOMIC_ACQUIRE))
+			;
+		result = n == SYS_mmap ? do_mmap(b) : do_munmap((uintptr_t)a, b);
+		__atomic_store_n(&heap_lock, 0, __ATOMIC_RELEASE);
+		return result;
+	}
+	case SYS_readv:
+	{
+		/* musl's FILE reads (__stdio_read: the caller's buffer, then the
+		FILE's own) - fread failed without it */
+		const struct guest_iovec *iov = (const struct guest_iovec *)(uintptr_t)b;
+		long long total = 0;
+
+		for (long long i = 0; i < c; i++)
+		{
+			long got;
+
+			if (!iov[i].iov_len)
+				continue;
+			got = host_read((int)a, (void *)(uintptr_t)iov[i].iov_base, iov[i].iov_len);
+			if (got < 0)
+				return total ? total : got;
+			total += got;
+			if ((unsigned long)got < iov[i].iov_len)
+				break;
+		}
+		return total;
+	}
 	case SYS_brk:
 		return 0; /* "can't extend brk" - mallocng's real path is mmap anyway */
 	case SYS_write:

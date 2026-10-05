@@ -23,6 +23,7 @@ needs to execute.
 
 #include "../../include/switch_guest_abi.h"
 #include "xiso.h"
+#include "host_loading_text.h"
 
 static FILE *g_log;
 
@@ -519,6 +520,7 @@ int main(int argc, char *argv[])
 	logf_both("halo-ce-nx guest-poc host starting\n");
 
 	ensure_game_data_extracted();
+	host_loading_text_console();
 
 	if (load_and_run_guest("sdmc:/switch/halo-ce-nx-guest-poc/guest.elf") == 0)
 		logf_both("SUCCESS: the guest loaded, ran and called back into the host.\n");

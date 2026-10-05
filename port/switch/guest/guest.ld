@@ -18,7 +18,7 @@ PHDRS
 	data PT_LOAD FLAGS(6); /* RW- */
 }
 
-HEAP_SIZE = 32M;
+HEAP_SIZE = 64M;
 
 SECTIONS
 {

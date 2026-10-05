@@ -78,7 +78,7 @@ the game's own CreateThread (CREATE_SUSPENDED, never actually resumed
 that creates a second real thread too, which a single reused Thread
 struct would corrupt out from under the first while it's still
 running. A handful of slots, not just one. */
-#define MAXIMUM_HOST_THREADS 4
+#define MAXIMUM_HOST_THREADS 16
 static Thread s_threads[MAXIMUM_HOST_THREADS];
 static int s_threads_used[MAXIMUM_HOST_THREADS];
 
