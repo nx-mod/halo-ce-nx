@@ -351,6 +351,11 @@ struct gl_device
 	GLuint samplers[D3DTSS_MAXSTAGES];
 
 	GLuint queries[VISIBILITY_TEST_SLOTS];
+#ifdef HALO_SWITCH
+	/* free query objects, taken in turn for each test (QUERY_RING) */
+	GLuint query_ring[VISIBILITY_TEST_SLOTS];
+	unsigned long query_ring_next, query_ring_taken;
+#endif
 	BOOL query_pending[VISIBILITY_TEST_SLOTS];
 	/* the pixels each of the game's pixels covered in the test's target
 	(render_target_get), which its count is divided by */
@@ -973,6 +978,9 @@ static void gl_initialize(void)
 #endif
 	glGenSamplers(D3DTSS_MAXSTAGES, device.samplers);
 	glGenQueries(VISIBILITY_TEST_SLOTS, device.queries);
+#ifdef HALO_SWITCH
+	glGenQueries(VISIBILITY_TEST_SLOTS, device.query_ring);
+#endif
 #if !defined(HALO_ANDROID) && !defined(HALO_SWITCH)
 	glGenBuffers(1, &device.visibility_results_buffer);
 	glBindBuffer(GL_QUERY_BUFFER, device.visibility_results_buffer);
@@ -1423,7 +1431,19 @@ void WINAPI D3DDevice_BeginVisibilityTest(void)
 		return;
 	}
 #endif
+#ifdef HALO_SWITCH
+	/* A query object begun again while the GPU still owes its last result
+	makes the driver wait for the GPU. The scratch used to be the slot's
+	previous query, often a frame old and still in flight: every lens
+	flare test waited, 18 ms a frame in a10's cryo bay. A ring of free
+	objects instead: one comes round again only after as many more tests
+	as the ring holds, long after its result. */
+	device.query_ring_taken = device.query_ring_next;
+	device.query_ring_next = (device.query_ring_next + 1) % VISIBILITY_TEST_SLOTS;
+	glBeginQuery(VISIBILITY_QUERY, device.query_ring[device.query_ring_taken]);
+#else
 	glBeginQuery(VISIBILITY_QUERY, device.queries[0]);
+#endif
 }
 
 HRESULT WINAPI D3DDevice_EndVisibilityTest(DWORD index)
@@ -1450,10 +1470,18 @@ HRESULT WINAPI D3DDevice_EndVisibilityTest(DWORD index)
 	test's area (lens flares, rasterizer_lights.c), a split-screen window's
 	or the screen's alike */
 	device.query_area[index] = target_scale[0] * target_scale[1];
+#ifdef HALO_SWITCH
+	/* the ring's object becomes the slot's, the slot's goes back in the
+	ring where the taken one was: last in line again */
+	scratch = device.query_ring[device.query_ring_taken];
+	device.query_ring[device.query_ring_taken] = device.queries[index];
+	device.queries[index] = scratch;
+#else
 	/* swap the scratch query into the requested slot */
 	scratch = device.queries[0];
 	device.queries[0] = device.queries[index];
 	device.queries[index] = scratch;
+#endif
 	device.query_pending[index] = TRUE;
 #if !defined(HALO_ANDROID) && !defined(HALO_SWITCH)
 	if (device.visibility_results)
