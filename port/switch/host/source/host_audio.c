@@ -45,6 +45,17 @@ static s16 s_samples[AUDIO_BUFFER_COUNT][AUDIO_BUFFER_FRAMES * AUDIO_CHANNELS] _
 static AudioDriverWaveBuf s_wavebufs[AUDIO_BUFFER_COUNT];
 static AudioDriver s_driver;
 static int s_initialized;
+/* host_main.c's heartbeat: buffers submitted, and the loudest sample since
+it last asked - 0 means the mixer is producing silence */
+static volatile unsigned long s_buffers_written;
+static volatile int s_peak;
+
+void host_audio_stats(unsigned long *buffers, int *peak)
+{
+	*buffers = s_buffers_written;
+	*peak = s_peak;
+	s_peak = 0;
+}
 
 int host_audio_open(void)
 {
@@ -87,6 +98,8 @@ int host_audio_open(void)
 		audrenExit();
 		return 0;
 	}
+	audrvVoiceSetVolume(&s_driver, AUDIO_VOICE, 1.0f);
+	audrvMixSetVolume(&s_driver, AUDREN_FINAL_MIX_ID, 1.0f);
 	audrvVoiceSetDestinationMix(&s_driver, AUDIO_VOICE, AUDREN_FINAL_MIX_ID);
 	audrvVoiceSetMixFactor(&s_driver, AUDIO_VOICE, 1.0f, 0, 0);
 	audrvVoiceSetMixFactor(&s_driver, AUDIO_VOICE, 1.0f, 1, 1);
@@ -128,6 +141,19 @@ void host_audio_write(const short *pcm)
 		if (slot < AUDIO_BUFFER_COUNT)
 			break;
 		svcSleepThread(1000000);
+	}
+	{
+		int i, peak = s_peak;
+
+		for (i = 0; i < AUDIO_BUFFER_FRAMES * AUDIO_CHANNELS; i++)
+		{
+			int v = pcm[i] < 0 ? -pcm[i] : pcm[i];
+
+			if (v > peak)
+				peak = v;
+		}
+		s_peak = peak;
+		s_buffers_written++;
 	}
 	memcpy(s_samples[slot], pcm, AUDIO_BUFFER_BYTES);
 	armDCacheFlush(s_samples[slot], AUDIO_BUFFER_BYTES);

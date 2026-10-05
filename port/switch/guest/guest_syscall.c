@@ -46,6 +46,7 @@ extern char __guest_heap_end[];
 #define SYS_pread64 67
 #define SYS_pwrite64 68
 #define SYS_munmap 215
+#define SYS_madvise 233
 #define SYS_brk 214
 #define SYS_mmap 222
 #define SYS_exit 93
@@ -326,6 +327,12 @@ long __guest_syscall(long long n, long long a, long long b, long long c, long lo
 		sleep_ns(ns);
 		return 0;
 	}
+	case SYS_madvise:
+		/* oldmalloc's free hands large free spans back (MADV_DONTNEED) on
+		every call; the memory just stays mapped here. Logging it as
+		unimplemented - an SD card commit per call, 15000+ of them by the
+		main menu - is what ran the game at about a frame a second. */
+		return 0;
 	case SYS_futex:
 		/* musl's __wait/__wake (malloc's lock under contention). No real
 		futex: a wait returns at once and __wait's caller re-checks the
@@ -343,8 +350,14 @@ long __guest_syscall(long long n, long long a, long long b, long long c, long lo
 
 		/* the bare host_log this used to be never said *which* number -
 		spent more time guessing than it should have, more than once */
-		platform_log("__guest_syscall: unimplemented syscall number %lld (a=%lld b=%lld c=%lld)",
-			n, a, b, c);
+		/* the first few of each number, then every 1000th: one chatty
+		syscall must not turn into an SD card write per call */
+		static unsigned int counts[512];
+		unsigned int count = n >= 0 && n < 512 ? ++counts[n] : 1;
+
+		if (count <= 3 || count % 1000 == 0)
+			platform_log("__guest_syscall: unimplemented syscall number %lld (a=%lld b=%lld c=%lld), call %u",
+				n, a, b, c, count);
 		return -ENOSYS;
 	}
 	}

@@ -542,8 +542,15 @@ static void heartbeat_thread(void *arg)
 		swaps = g_host_swap_count;
 		/* every 2 s while frames are moving, every 10 s once stalled */
 		if (swaps != last_swaps || ticks % 5 == 0)
-			logf_both("heartbeat: %llus, %lu frames presented\n",
-				armTicksToNs(armGetSystemTick() - start) / 1000000000ULL, swaps);
+		{
+			extern void host_audio_stats(unsigned long *buffers, int *peak);
+			unsigned long audio_buffers;
+			int audio_peak;
+
+			host_audio_stats(&audio_buffers, &audio_peak);
+			logf_both("heartbeat: %llus, %lu frames presented, %lu audio buffers, audio peak %d\n",
+				armTicksToNs(armGetSystemTick() - start) / 1000000000ULL, swaps, audio_buffers, audio_peak);
+		}
 		last_swaps = swaps;
 	}
 }
