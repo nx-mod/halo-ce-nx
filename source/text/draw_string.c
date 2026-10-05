@@ -1170,6 +1170,20 @@ void draw_string(
 			break;
 
 		default:
+#ifdef HALO_SWITCH
+			{
+				/* which string the parser choked on, before the halt */
+				extern void platform_log(const char *format, ...);
+				char hex[2 * 48 + 1];
+				int index;
+
+				for (index = 0; index < 48 && string[index]; index++)
+					snprintf(hex + 2 * index, 3, "%02x", (unsigned char)string[index]);
+				hex[2 * index] = 0;
+				platform_log("draw_string: parse result %d at index %d in \"%.48s\" (hex %s)",
+					(int)state.result, (int)state.string_index, string, hex);
+			}
+#endif
 			display_assert(NULL, "c:\\halo\\SOURCE\\text\\draw_string.c", 817, TRUE);
 			system_exit(-1);
 			break;

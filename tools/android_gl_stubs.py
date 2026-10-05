@@ -2,10 +2,11 @@
 """Generate the Android guest's OpenGL ES entry points.
 
 The guest (ILP32 code, see port/android/README.md) cannot link against the
-host's libGLESv3, but it can call it: a host function receives the guest's
-pointer arguments zero-extended, and 32-bit integers and floats go in the
+host's libGLESv3, but it can call it: 32-bit integers and floats go in the
 same registers under both ABIs. What differs is
 
+- pointers: 32-bit in the guest, with the upper half of the register
+  undefined, so every pointer argument is zero-extended explicitly;
 - GLsizeiptr and GLintptr, 32-bit in the guest and 64-bit in the host;
 - arguments passed on the stack (beyond the eighth integer argument), which
   the guest packs by size while the host expects 8-byte slots;
@@ -140,12 +141,13 @@ def main():
             on_stack = integer_index >= INTEGER_REGISTER_COUNT
             integer_index += 1
             if is_pointer:
-                if on_stack:
-                    host_params.append("unsigned long long")
-                    call_args.append(f"(unsigned long long)(unsigned int){arg}")
-                else:
-                    host_params.append(ptype)
-                    call_args.append(arg)
+                # every pointer, in a register too: the ILP32 ABI leaves a
+                # pointer argument's upper 32 bits undefined, and GCC's
+                # (devkitA64, Switch) don't come back zero - a buffer offset
+                # passed to glVertexAttribPointer/glDrawElements read
+                # vertices and indices from garbage offsets
+                host_params.append("unsigned long long")
+                call_args.append(f"(unsigned long long)(unsigned int){arg}")
             elif wide or on_stack:
                 host_params.append("long long")
                 call_args.append(f"(long long){arg}")
