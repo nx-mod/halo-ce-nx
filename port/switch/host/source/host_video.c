@@ -40,6 +40,37 @@ static EGLDisplay s_display = EGL_NO_DISPLAY;
 static EGLSurface s_surface = EGL_NO_SURFACE;
 static EGLContext s_context = EGL_NO_CONTEXT;
 
+extern void logf_both(const char *fmt, ...);
+
+/* each distinct message once (up to 64), with how many frames in */
+extern volatile unsigned long g_host_swap_count;
+
+static void GL_APIENTRY gl_debug_message(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
+	const GLchar *message, const void *user)
+{
+	static unsigned long seen[64];
+	static int seen_count;
+	unsigned long hash = 5381;
+	const GLchar *c;
+	int index;
+
+	(void)source;
+	(void)length;
+	(void)user;
+	if (severity == GL_DEBUG_SEVERITY_NOTIFICATION)
+		return;
+	for (c = message; *c; c++)
+		hash = hash * 33 + (unsigned char)*c;
+	hash ^= id;
+	for (index = 0; index < seen_count; index++)
+		if (seen[index] == hash)
+			return;
+	if (seen_count >= 64)
+		return;
+	seen[seen_count++] = hash;
+	logf_both("GL %s (frame %lu): %s\n", type == GL_DEBUG_TYPE_ERROR ? "ERROR" : "debug", g_host_swap_count, message);
+}
+
 int platform_video_initialize(unsigned long width, unsigned long height)
 {
 	static const EGLint config_attribs[] = {
@@ -80,6 +111,12 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 		return 0;
 	if (!eglMakeCurrent(s_display, s_surface, s_surface, s_context))
 		return 0;
+	/* the driver's own account of any GL call it rejects - the renderer
+	never checks glGetError, so a rejected texture format or vertex
+	attribute fails silently otherwise */
+	glEnable(GL_DEBUG_OUTPUT);
+	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+	glDebugMessageCallback(gl_debug_message, NULL);
 	{
 		int w = 0, h = 0;
 
