@@ -98,17 +98,26 @@ unsigned long __stdcall GetTickCount(void)
 	return frequency ? (unsigned long)(switch_system_tick() * 1000ULL / frequency) : 0;
 }
 
+/* A microsecond counter, as port/linux/src/xbox_kernel.c reports: the
+game does 32-bit intermediate arithmetic on counter values, and the raw
+19.2 MHz system counter overflowed it (a fade computed an alpha of -48). */
+#define PERFORMANCE_FREQUENCY 1000000ULL
+
 int __stdcall QueryPerformanceCounter(union _LARGE_INTEGER *counter)
 {
-	if (counter)
-		counter->QuadPart = (__int64)switch_system_tick();
+	unsigned long long tick = switch_system_tick();
+	unsigned long long frequency = switch_system_tick_frequency();
+
+	if (counter && frequency)
+		counter->QuadPart = (__int64)((tick / frequency) * PERFORMANCE_FREQUENCY +
+			(tick % frequency) * PERFORMANCE_FREQUENCY / frequency);
 	return 1;
 }
 
 int __stdcall QueryPerformanceFrequency(union _LARGE_INTEGER *frequency)
 {
 	if (frequency)
-		frequency->QuadPart = (__int64)switch_system_tick_frequency();
+		frequency->QuadPart = (__int64)PERFORMANCE_FREQUENCY;
 	return 1;
 }
 
