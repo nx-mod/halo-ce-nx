@@ -103,6 +103,10 @@ SWITCH_PLATFORM_FILES = [
     # guest syscalls (guest_syscall.c) - PORTING.md's "real file I/O"
     # milestone.
     "xbox_files.c",
+    # the Xbox XAPI: saved games, signatures, nicknames, language - real,
+    # replacing switch_xinput_null.c stubs that reported every save as
+    # existing (999 untitled saved games) and signed nothing
+    "xbox_xapi.c",
     # the real DirectSound mixer (ADPCM decode, resampling, 3D rolloff/
     # panning) - reused exactly as proven on Linux/Vita; only its own
     # HALO_SWITCH branches replace the SDL-based "feed PCM to the
