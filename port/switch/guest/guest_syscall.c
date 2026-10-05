@@ -33,6 +33,8 @@ extern long host_close(int fd);
 extern long long host_lseek(int fd, long long offset, int whence);
 extern long host_unlink(const char *path);
 extern long host_rename(const char *from, const char *to);
+extern long host_pread(int fd, void *buf, unsigned long count, long long offset);
+extern long host_pwrite(int fd, const void *buf, unsigned long count, long long offset);
 
 extern char __guest_heap_start[];
 extern char __guest_heap_end[];
@@ -278,25 +280,11 @@ long __guest_syscall(long long n, long long a, long long b, long long c, long lo
 	case SYS_lseek:
 		return (long)host_lseek((int)a, (long long)b, (int)c);
 	case SYS_pread64:
-		/* xbox_files.c's read_some() positioned path - cache_file_read's
-		own call chain (source/cache/cache_files_windows.c), the one
-		call site that will matter most once startup gets this far:
-		every real map/tag read goes through here. Same seek-then-read
-		reasoning as SYS_pwrite64 below. */
-		host_lseek((int)a, (long long)d, 0 /* SEEK_SET */);
-		return host_read((int)a, (void *)(uintptr_t)b, (unsigned long)c);
+		/* one locked host operation: a seek then a read here raced with
+		other threads reading the same descriptor (host_posix_io.c) */
+		return host_pread((int)a, (void *)(uintptr_t)b, (unsigned long)c, (long long)d);
 	case SYS_pwrite64:
-		/* xbox_files.c's write_at() - the one real caller, for its
-		OVERLAPPED/positioned WriteFile path (cache file header
-		writes) - calls plain pwrite(), not two separate lseek()+
-		write() calls, so there's no separate SYS_lseek this guest
-		already makes to piggyback on. No real fd is ever shared
-		between threads here (checked: host_threads.c's one extra
-		real thread never touches file I/O), so a plain seek-then-
-		write is exactly as atomic as this guest needs, not just a
-		convenient shortcut. */
-		host_lseek((int)a, (long long)d, 0 /* SEEK_SET */);
-		return host_write_fd((int)a, (const void *)(uintptr_t)b, (unsigned long)c);
+		return host_pwrite((int)a, (const void *)(uintptr_t)b, (unsigned long)c, (long long)d);
 	case SYS_clock_gettime:
 	{
 		/* d3d8_gl.c's vertical blank thread paces itself with this and

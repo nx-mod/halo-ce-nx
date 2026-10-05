@@ -15,6 +15,14 @@ split.
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <switch.h>
+
+/* One lock over every read, write and seek: the guest's cache file
+thread, its filesystem check thread and the main thread share
+descriptors (the map file), and a positioned read is a seek then a read.
+Unlocked, another thread's seek between the two read the map's textures
+and vertices from the wrong offsets - different garbage every run. */
+static Mutex s_io_lock;
 
 /* guest_syscall.c passes `flags` straight from the guest's raw SYS_openat
 argument - musl's aarch64 O_CREAT/O_EXCL/O_TRUNC/O_APPEND/O_CLOEXEC bit
@@ -45,16 +53,70 @@ long host_open(const char *path, int guest_flags, int mode)
 
 long host_read(int fd, void *buf, unsigned long count)
 {
-	long result = (long)read(fd, buf, count);
+	long result;
 
-	return result < 0 ? -errno : result;
+	mutexLock(&s_io_lock);
+	result = (long)read(fd, buf, count);
+	if (result < 0)
+		result = -errno;
+	mutexUnlock(&s_io_lock);
+	return result;
 }
 
 long host_write_fd(int fd, const void *buf, unsigned long count)
 {
-	long result = (long)write(fd, buf, count);
+	long result;
 
-	return result < 0 ? -errno : result;
+	mutexLock(&s_io_lock);
+	result = (long)write(fd, buf, count);
+	if (result < 0)
+		result = -errno;
+	mutexUnlock(&s_io_lock);
+	return result;
+}
+
+/* pread/pwrite as one operation under the lock, leaving the descriptor's
+own position where it was, as the real calls do */
+long host_pread(int fd, void *buf, unsigned long count, long long offset)
+{
+	long result;
+	off_t saved;
+
+	mutexLock(&s_io_lock);
+	saved = lseek(fd, 0, SEEK_CUR);
+	if (lseek(fd, (off_t)offset, SEEK_SET) < 0)
+		result = -errno;
+	else
+	{
+		result = (long)read(fd, buf, count);
+		if (result < 0)
+			result = -errno;
+	}
+	if (saved >= 0)
+		lseek(fd, saved, SEEK_SET);
+	mutexUnlock(&s_io_lock);
+	return result;
+}
+
+long host_pwrite(int fd, const void *buf, unsigned long count, long long offset)
+{
+	long result;
+	off_t saved;
+
+	mutexLock(&s_io_lock);
+	saved = lseek(fd, 0, SEEK_CUR);
+	if (lseek(fd, (off_t)offset, SEEK_SET) < 0)
+		result = -errno;
+	else
+	{
+		result = (long)write(fd, buf, count);
+		if (result < 0)
+			result = -errno;
+	}
+	if (saved >= 0)
+		lseek(fd, saved, SEEK_SET);
+	mutexUnlock(&s_io_lock);
+	return result;
 }
 
 long host_close(int fd)
@@ -64,9 +126,14 @@ long host_close(int fd)
 
 long long host_lseek(int fd, long long offset, int whence)
 {
-	long long result = (long long)lseek(fd, (off_t)offset, whence);
+	long long result;
 
-	return result < 0 ? -errno : result;
+	mutexLock(&s_io_lock);
+	result = (long long)lseek(fd, (off_t)offset, whence);
+	if (result < 0)
+		result = -errno;
+	mutexUnlock(&s_io_lock);
+	return result;
 }
 
 /* the guest's unlinkat/renameat (guest_syscall.c): xbox_files.c's
