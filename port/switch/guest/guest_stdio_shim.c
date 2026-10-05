@@ -20,10 +20,13 @@ size_t __stdout_write(FILE *f, const unsigned char *buf, size_t len)
 	return __stdio_write(f, buf, len);
 }
 
+/* musl's own (src/stdio/__stdio_seek.c). Every FILE uses this, not just
+stdout: a -1 stand-in failed every fseek/ftell in the game - progress_bar.c
+sized default.xbe as -1 and halted on free(NULL). lseek on stdout's fd
+fails on its own, as on Linux. */
+off_t __lseek(int fd, off_t offset, int whence);
+
 long long __stdio_seek(FILE *f, long long off, int whence)
 {
-	(void)f;
-	(void)off;
-	(void)whence;
-	return -1; /* ESPIPE-equivalent: this stream was never seekable */
+	return __lseek(f->fd, off, whence);
 }
