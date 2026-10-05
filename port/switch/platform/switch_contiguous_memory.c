@@ -29,7 +29,12 @@ this single-threaded guest anyway.
 #define PAGE_SIZE_BYTES 0x1000UL
 #define PAGE_COUNT (PLATFORM_CONTIGUOUS_SIZE / PAGE_SIZE_BYTES)
 
-static unsigned char arena[PLATFORM_CONTIGUOUS_SIZE] __attribute__((aligned(PAGE_SIZE_BYTES)));
+/* placed at a fixed address by guest.ld (.contiguous): saves record game
+state addresses. The section is nobits (the "//" ends the assembler line
+GCC writes, the way "#" does on x86), so 112 MB of zeroes stay out of
+guest.elf. */
+static unsigned char arena[PLATFORM_CONTIGUOUS_SIZE]
+	__attribute__((aligned(PAGE_SIZE_BYTES), section(".contiguous_arena,\"aw\",%nobits//")));
 unsigned long platform_contiguous_base;
 static DWORD page_protection[PAGE_COUNT];
 static unsigned long block_page_count[PAGE_COUNT];

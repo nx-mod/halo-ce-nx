@@ -205,16 +205,29 @@ static int build_vertices(struct overlay_text *overlay, int width, int height, f
 			vertices[count++] = (bottom + segments[s].y1 * glyph_height) / (float)height * 2.0f - 1.0f;
 		}
 	}
-	if (!overlay->vbo)
+	/* The game's vertex array and buffer go back as they were. Leaving this
+	string's bound made the game's next vertex setup land in the overlay's
+	vertex array: the overlay then drew the game's vertices - a stray
+	white line - instead of its text, which showed only on the frame that
+	rebuilt it, once a second: the counter's flicker. */
 	{
-		glGenVertexArrays(1, &overlay->vao);
-		glGenBuffers(1, &overlay->vbo);
+		GLint vertex_array = 0, array_buffer = 0;
+
+		glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertex_array);
+		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_buffer);
+		if (!overlay->vbo)
+		{
+			glGenVertexArrays(1, &overlay->vao);
+			glGenBuffers(1, &overlay->vbo);
+		}
+		glBindVertexArray(overlay->vao);
+		glBindBuffer(GL_ARRAY_BUFFER, overlay->vbo);
+		glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(count * sizeof(float)), vertices, GL_STATIC_DRAW);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (const void *)0);
+		glBindVertexArray((GLuint)vertex_array);
+		glBindBuffer(GL_ARRAY_BUFFER, (GLuint)array_buffer);
 	}
-	glBindBuffer(GL_ARRAY_BUFFER, overlay->vbo);
-	glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(count * sizeof(float)), vertices, GL_STATIC_DRAW);
-	glBindVertexArray(overlay->vao);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (const void *)0);
 	overlay->vertex_count = count / 2;
 	return count > 0;
 }
