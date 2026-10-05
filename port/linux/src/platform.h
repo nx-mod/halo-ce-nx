@@ -147,7 +147,12 @@ void *platform_contiguous_alloc(unsigned long size, unsigned long alignment,
 	unsigned long physical_address, DWORD protect);
 void platform_contiguous_free(void *address);
 BOOL platform_is_contiguous(const void *address);
-#ifdef HALO_VITA
+/* The Vita and Switch place the window at a runtime address with no
+particular alignment, so physical <-> virtual is an offset. The OR/AND-NOT
+form below only works for a base aligned past the window's size (the fixed
+0x80000000); on Switch it folded different physical addresses onto the
+same memory - textures sharing bytes, vertices read from the wrong place. */
+#if defined(HALO_VITA) || defined(HALO_SWITCH)
 #define PLATFORM_PHYSICAL_TO_VIRTUAL(physical) ((void *)((unsigned long)(physical) + PLATFORM_CONTIGUOUS_BASE))
 #define PLATFORM_VIRTUAL_TO_PHYSICAL(address) ((unsigned long)(address) - PLATFORM_CONTIGUOUS_BASE)
 #else
