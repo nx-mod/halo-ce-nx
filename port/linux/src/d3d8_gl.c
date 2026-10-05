@@ -793,8 +793,21 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, (GLsizei)entry->target.gl_width,
 			(GLsizei)entry->target.gl_height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
 	else
+	{
+#ifdef HALO_SWITCH
+		/* created black, not undefined: the game presents a frame early in
+		startup before drawing into its back buffer, and the GPU memory's
+		old contents flashed on screen (an orange or negative image) */
+		void *black = calloc(entry->target.gl_width * entry->target.gl_height, 4);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)entry->target.gl_width, (GLsizei)entry->target.gl_height,
+			0, GL_BGRA, GL_UNSIGNED_BYTE, black);
+		free(black);
+#else
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)entry->target.gl_width, (GLsizei)entry->target.gl_height,
 			0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+#endif
+	}
 	xgpu_gl_state_invalidate();
 	entry->next = render_targets;
 	render_targets = entry;
