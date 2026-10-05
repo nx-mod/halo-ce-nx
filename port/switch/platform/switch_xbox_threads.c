@@ -68,6 +68,7 @@ void *__stdcall CreateThread(void *security_attributes, unsigned long stack_size
 	either way, so starting it running immediately changes nothing it
 	depends on */
 	(void)creation_flags;
+	platform_log("CreateThread: start routine %p", (void *)start_routine);
 	start = malloc(sizeof(*start));
 	if (!start)
 		return 0;

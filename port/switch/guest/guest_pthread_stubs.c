@@ -49,6 +49,11 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	void *tls_block;
 
 	(void)attr;
+	{
+		extern void platform_log(const char *format, ...);
+
+		platform_log("pthread_create: start routine %p", (void *)start);
+	}
 	__guest_enable_locks();
 	context = malloc(sizeof(*context));
 	tls_block = calloc(1, 512);

@@ -690,6 +690,13 @@ extern void scripted_camera_set(
 	word camera_point_index1,
 	long transition_time);
 
+#ifdef HALO_SWITCH
+extern void platform_log(const char *format, ...);
+#define MAIN_SWITCH_TRACE(step) platform_log("main_loop: " step " done")
+#else
+#define MAIN_SWITCH_TRACE(step)
+#endif
+
 /* ---------- globals */
 
 short global_difficulty_level = 1;
@@ -1099,11 +1106,15 @@ void main_menu_load(
 {
 	if (!main_globals.main_menu_scenario_loaded)
 		main_load_ui_scenario(FALSE);
+	MAIN_SWITCH_TRACE("main_menu_load: main_load_ui_scenario");
 	main_screen_shell_load();
+	MAIN_SWITCH_TRACE("main_menu_load: main_screen_shell_load");
 	main_menu_precache_resources();
+	MAIN_SWITCH_TRACE("main_menu_load: main_menu_precache_resources");
 	update_server_delete();
 	update_server_new();
 	update_server_start();
+	MAIN_SWITCH_TRACE("main_menu_load: update_server");
 	game_time_dispose_from_old_map();
 	game_time_initialize_for_new_map();
 	game_time_start();
@@ -3464,13 +3475,6 @@ static void main_split_report(void)
 	platform_log("main-split (ms/frame):%s", line);
 }
 #define MAIN_SPLIT(step) main_split_mark(step)
-#endif
-
-#ifdef HALO_SWITCH
-extern void platform_log(const char *format, ...);
-#define MAIN_SWITCH_TRACE(step) platform_log("main_loop: " step " done")
-#else
-#define MAIN_SWITCH_TRACE(step)
 #endif
 
 void main_loop(

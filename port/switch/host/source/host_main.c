@@ -552,8 +552,14 @@ static void start_heartbeat(void)
 {
 	static Thread thread;
 
-	if (R_SUCCEEDED(threadCreate(&thread, heartbeat_thread, NULL, NULL, 0x4000, 0x3F, -2)))
-		threadStart(&thread);
+	/* applications may use priorities 0x1C-0x3B only; same as the main
+	thread, on core 1, so a main thread spinning on core 0 can't starve it */
+	Result rc = threadCreate(&thread, heartbeat_thread, NULL, NULL, 0x10000, 0x2C, 1);
+
+	if (R_SUCCEEDED(rc))
+		rc = threadStart(&thread);
+	if (R_FAILED(rc))
+		logf_both("heartbeat: could not start, rc=0x%x\n", rc);
 }
 
 int main(int argc, char *argv[])
