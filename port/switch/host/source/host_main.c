@@ -530,37 +530,29 @@ static int ensure_game_data_extracted(void)
 	return 1;
 }
 
-/* Every few seconds, how many frames the game has presented: a hang
+/* Every 10 seconds, how many frames the game has presented: a hang
 with no log line says nothing on its own, this says whether the game
 is still presenting (alive, stuck loading) or frozen. */
 extern volatile unsigned long g_host_swap_count;
 
 static void heartbeat_thread(void *arg)
 {
+	extern void host_audio_stats(unsigned long *buffers, int *peak);
 	u64 start = armGetSystemTick();
-	unsigned long last_swaps = (unsigned long)-1;
-	int ticks = 0;
 
 	(void)arg;
 	for (;;)
 	{
-		unsigned long swaps;
+		unsigned long audio_buffers;
+		int audio_peak;
 
-		svcSleepThread(2000000000ULL);
-		ticks++;
-		swaps = g_host_swap_count;
-		/* every 2 s while frames are moving, every 10 s once stalled */
-		if (swaps != last_swaps || ticks % 5 == 0)
-		{
-			extern void host_audio_stats(unsigned long *buffers, int *peak);
-			unsigned long audio_buffers;
-			int audio_peak;
-
-			host_audio_stats(&audio_buffers, &audio_peak);
-			logf_both("heartbeat: %llus, %lu frames presented, %lu audio buffers, audio peak %d\n",
-				armTicksToNs(armGetSystemTick() - start) / 1000000000ULL, swaps, audio_buffers, audio_peak);
-		}
-		last_swaps = swaps;
+		/* every 10 s: each log line commits the SD card, which must not
+		become a hitch of its own */
+		svcSleepThread(10000000000ULL);
+		host_audio_stats(&audio_buffers, &audio_peak);
+		logf_both("heartbeat: %llus, %lu frames presented, %lu audio buffers, audio peak %d\n",
+			armTicksToNs(armGetSystemTick() - start) / 1000000000ULL, (unsigned long)g_host_swap_count,
+			audio_buffers, audio_peak);
 	}
 }
 

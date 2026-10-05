@@ -114,6 +114,10 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 	/* the driver's own account of any GL call it rejects - the renderer
 	never checks glGetError, so a rejected texture format or vertex
 	attribute fails silently otherwise */
+	/* a steady 30: the game ticks at 30 Hz, as on the Xbox, and frames
+	presented as fast as possible against a 60 Hz display (with no
+	interpolation between ticks) arrived unevenly - stutter */
+	eglSwapInterval(s_display, 2);
 	glEnable(GL_DEBUG_OUTPUT);
 	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 	glDebugMessageCallback(gl_debug_message, NULL);
