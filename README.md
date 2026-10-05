@@ -5,9 +5,9 @@ Xbox decompilation. Not an emulator — the game's own code runs natively
 on the Switch's CPU, and its Direct3D rendering is translated to GLES3.
 
 **Status: playable.** On real hardware it boots to the main menu and plays
-the campaign with sound and controller input, at a 30 fps cap (about
-20–30 in combat). Still rough in places; see [Known issues](#known-issues)
-and [PORTING.md](PORTING.md).
+the campaign with sound and controller input, at 60 fps (about 30 in
+combat — see [Frame rate](#frame-rate)). Still rough in places; see
+[Known issues](#known-issues) and [PORTING.md](PORTING.md).
 
 **No game data is included.** You need your own Xbox copy of Halo:
 Combat Evolved — the PC version's maps don't work.
@@ -18,8 +18,8 @@ Combat Evolved — the PC version's maps don't work.
 
 [![A firefight, running on a Switch (click for the full-quality video)](port/switch/media/gameplay.gif)](port/switch/media/gameplay.mp4)
 
-*Captured on a Switch. The numbers along the top of the clip come from a
-performance overlay running alongside, not from the game.*
+*Captured on a Switch. The numbers along the top of the clip come from the
+overlay described under [Frame rate](#frame-rate).*
 
 ## Installing
 
@@ -60,11 +60,37 @@ make -C port/switch/host -j2
 make it (see PORTING.md). The guest runtime objects in `port/switch/guest/`
 and its musl are built separately, as PORTING.md describes.
 
+## Frame rate
+
+Presented at **60 fps**, which the display's rate allows because the game
+renders interpolated frames between its 30 Hz simulation ticks. In combat
+it settles around 30, because rendering a frame costs about as much as a
+tick does and the interpolator re-poses every object to draw one.
+
+The cap is a setting, not a constant. Put a number in
+`sdmc:/haloce-nx/present.txt`:
+
+| value | effect |
+|---|---|
+| `30` | one present per two vsyncs — the original behaviour |
+| `60` | one present per vsync (the default) |
+| `0` | no waiting at all, so you see whatever the renderer manages |
+
+With the file absent the cap is `HOST_PRESENT_FPS_CAP` in
+[`host_video.c`](port/switch/host/source/host_video.c).
+
+An overlay at the top of the screen reports the frame rate and how many
+shaders have compiled, as `FPS  done/issued` — the two shader numbers
+converge when nothing is compiling.
+
 ## Known issues
 
 - **Hitches the first time an effect appears**: each new shader takes
-  10–70 ms to compile and link, and this driver can't cache compiled
-  programs. A precompiled shader pack is the next piece of work.
+  10–70 ms to compile and link. This driver's share group doesn't hand
+  program objects between contexts, it reports no program binary formats,
+  and Mesa's disk cache isn't reachable through nouveau's TGSI path, so
+  there's nowhere to put a compiled program that survives to the next
+  run. Not fixable in software here.
 - Text can look garbled for a moment while it loads, and some letters
   show a thin box around them.
 - Decals (bullet holes, blood) can still appear late or briefly look wrong.

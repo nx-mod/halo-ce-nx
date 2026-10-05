@@ -1289,12 +1289,116 @@ Milestone 8 description plus `port/switch/guest/guest.ld`, but
 treating it as "just run ninja" is wrong and will link a stale or
 incomplete image.
 
+## Shaders: why there is no precompiled pack
+
+A shader takes 10–70 ms to compile and link on this driver, and it happens
+the first time each effect appears — so the natural idea is to precompile
+them somewhere else. Three ways to do that were built and all three are
+closed on this hardware. The measurements, because they are the reason the
+code is commented out rather than deleted:
+
+**1. Program objects aren't shared between contexts.** Mesa gives each
+context a share group, and this driver's share group doesn't carry program
+objects. A worker thread with its own context compiles programs that the
+game's context cannot name.
+
+The trap here is worth recording, because the obvious liveness check is
+actively harmful. `glGetProgramiv(name, GL_LINK_STATUS)` from the game's
+context *looks* like it tests whether the worker's program arrived. It
+doesn't: program *names* come from one counter shared across the contexts
+(the names in the logs stepped by three and ran past the worker's entire
+output), while the *objects* aren't shared. So the probe finds some
+unrelated program the game itself has just built, sees that it is linked,
+and hands its name over — and the game renders a stranger's geometry. That
+was the white geometry, and it appeared in proportion to how many programs
+were wrongly handed over. The check that works is one that asks about
+something only the intended program has:
+
+```c
+/* in the worker, on a throwaway program: */
+uniform float shaman_share_probe;
+/* in the game's context, asking by name: */
+location = glGetUniformLocation(program, "shaman_share_probe");
+```
+
+A same-numbered stranger cannot answer. On failure, retire every pack
+entry so the game compiles in place. Also worth knowing: do *not*
+`glDeleteProgram` the probe afterwards. If the driver doesn't share, that
+name is one of the game's own programs, and deleting it is exactly the bug
+the probe exists to catch.
+
+**2. There are no program binary formats.** `GL_NUM_PROGRAM_BINARY_FORMATS`
+is 0, and neither `GL_ARB_get_program_binary` nor
+`GL_AMD_shader_binary_format` is present. A conformant ES 3.2 context is
+required to report at least one, so this is a real gap. This also
+retroactively shows commit `f110dfe` never worked: its `cache_enabled()`
+only created `shader_cache/` when formats > 0, and that directory has
+never existed on the card.
+
+**3. Mesa's own disk cache isn't reachable.** `MESA_SHADER_CACHE_DISABLE`,
+`MESA_SHADER_CACHE_MAX_SIZE`, `MESA_GLSL_CACHE_MAX_SIZE` and
+`XDG_CACHE_HOME` were all set, pointed at `sdmc:/haloce-nx/mesa_cache`, and
+no directory was ever created; compile time moved from 2886 ms to 2979 ms.
+The cache is keyed on NIR, and nouveau compiles GLSL via TGSI.
+
+Two further things that were tried and rejected on their own merits, not
+because of the above:
+
+- **One context on two threads.** The worker could build in the game's own
+  context, which sidesteps sharing entirely. Mesa's gallium state trackers
+  aren't safe for it — the share group exists precisely so they aren't.
+- **Compiling ahead into the game's context.** Workable, and it costs a
+  ~5.6 s freeze at startup to buy a later hitch. Bad trade.
+
+What survives is four interceptions in `host_shader_stats.c` that only
+count compilations, for the on-screen overlay. One of the four,
+`hostgl_glShaderSource`, is not optional at all: the generated guest
+wrapper truncates each string pointer to 32 bits before widening it into a
+64-bit slot (`build/switch/gen/guest_gl.c`), so the host must unpack the
+array itself. Removing it looks like a tidy-up and breaks shader upload.
+
+`host_shader_cache.c` is still on disk, disabled via `filter-out` in
+`port/switch/host/Makefile`. The filter is load-bearing, not tidiness: it
+defines the same four `hostgl_gl*` symbols, so building both is a duplicate
+symbol link error.
+
+## Frame rate: 30 was ours, not the game's
+
+The host capped presents at 30 with `eglSwapInterval(s_display, 2)`, and
+the comment above it said a faster rate stuttered, because presenting a
+30 Hz simulation as fast as the display allows repeats frames unevenly.
+That was true, and it is exactly what the interpolator exists to prevent —
+the comment predates the interpolator being reachable here.
+
+The guest already had everything:
+
+- `port/linux/game/render_interpolation.c` is compiled
+  (`build/switch/obj/port/linux/game/render_interpolation.o`)
+- `source/main/main.c` brackets `main_game_render()` with
+  `render_interpolation_frame_begin()` / `render_interpolation_frame_end()`
+- `source/game/game_time.c` calls `render_interpolation_tick()` per tick
+- `display.interpolation` in `config.toml` defaults to `true`
+- `d3d8_gl.c` takes the non-blocking path when it's on, so presents come at
+  the display's rate rather than queueing two deep
+
+So we were discarding every other frame we had been handed. It's now 60,
+and `sdmc:/haloce-nx/present.txt` caps it at 30, 60 or 0 (uncapped) without
+a rebuild.
+
+Combat still settles near 30, which is the honest cost: an interpolated
+frame re-poses every object, so rendering one costs about what a tick
+costs. Going past that means a 60 Hz simulation, and the physics is tuned
+around 30.
+
 ## Unexplored
 
 - Whether Switch homebrew has an `mprotect`-equivalent for the desktop
   ports' dirty-page texture tracking (`memory_watch.c`). No user-space
   signal handling on Switch (per libdol-nx). Worst case: drop incremental
   tracking, always re-upload.
+- Whether the interpolator's per-frame re-posing can be skipped for static
+  geometry, which is most of a level. That is the most likely route to
+  holding 60 in combat.
 
 ## If the guest/host split hits a wall after all
 

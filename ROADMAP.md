@@ -1,69 +1,59 @@
 # Roadmap
 
-Where Halo CE for PS Vita is and where it is going. Dates are aims, not
-promises: every change is tested on a real Vita before it ships.
+Where Halo CE for Switch is and where it is going. Dates are aims, not
+promises: every change is tested on real hardware before it ships.
 
 ## Released
 
-### 1.0 (October 1, 2026)
+### Playable (October 2026)
 
-The whole campaign and the multiplayer maps on the Vita, built natively
-from the decompilation of the Xbox game.
+The campaign from the main menu, natively on the Switch's CPU, with sound
+and controller input. The game's own Direct3D code runs as a 32-bit-pointer
+guest inside a 64-bit homebrew host, and its rendering is translated to
+GLES3. Presented at 60 fps.
 
-### 1.0.1
+## Known issues
 
-Crash fixes for explosions, grenades, particles and decals; no more
-flickering models; lens flares; skipping cutscenes; working multiplayer
-(the Vita's network stack refused the game's player updates); checkpoints
-without the freeze; a crouch toggle; an FPS counter switch.
+Listed in the [README](README.md#known-issues). The ones that matter most:
 
-### 1.0.2
+- **A hitch the first time an effect appears.** 10–70 ms per new shader,
+  and this driver offers nowhere to cache a compiled program that survives
+  to the next run. All three routes were built and measured closed; see
+  [PORTING.md](PORTING.md#shaders-why-there-is-no-precompiled-pack).
+- **No intro movies.** Bink video isn't supported; the game skips them.
+- Saves made with an older build may not load in a newer one.
 
-Textures stream in instead of freezing the game; faster loading; much
-cheaper big fights (simulation of many soldiers and sounds); the
-flashlight and dynamic lights now light the level; steady bloom and lens
-flares; saves that keep working across updates.
+## Next
 
-### 1.0.2.1 and 1.0.2.2
-
-Security fixes: the Xbox's debug console no longer listens on the network,
-and three bugs in the original LAN multiplayer code are closed.
-
-## Next: 1.0.3 (planned for next week)
-
-- **Flashlight:** characters lit by the flashlight flicker black on some
-  frames.
-- **Disappearing objects:** Master Chief vanishing in the Pillar of
-  Autumn's cryo tube when you look down; trees flickering at the edges of
-  the screen; some Covenant cover only visible from some angles.
-- **Grass and terrain** look noisy up close.
-- **Multiplayer:** a per-frame network cost of about 10 ms, and freezes of
-  a second or so during matches.
-- **Heavy fights:** the render is now the limit at the peak of the biggest
-  fights (objects, particles, visibility and shadows).
-- **Polish from player reports:** 16:9 movies shown at their own aspect
-  ratio, the main menu's music, the debug build number on screen, letters
-  on the name-entry keyboard, slightly distorted sound.
+- **Bink video**, so the intro movies and any in-game videos play. The
+  Xbox Bink decoder has been partially decompiled already
+  (`libs/binkxbox/`), so the work is finishing it and wiring it to the
+  video and audio paths — not starting from nothing. Options range from
+  completing that port to transcoding the movies to a format the Switch can
+  already play; the latter is much easier and needs a conversion pass, the
+  former needs no per-video work.
+- **Holding 60 fps in combat.** It presents at 60 but settles near 30,
+  because rendering an interpolated frame costs about what a simulation
+  tick costs. The most promising fix is not re-posing static geometry,
+  which is most of a level.
+- **Text**: garbled for a moment while it loads, and a thin box around some
+  letters.
+- **Decals** can appear late or briefly look wrong.
+- **Shadows** look a little off.
 
 ## Later
 
-- **Online play between Vitas**: host a public lobby or a private one with
-  a short code, join from the settings panel. Built and tested on PC,
-  waiting for hardware tests. Vita to Vita only for now.
-- **Ad hoc play** between Vitas without a router.
-- **Campaign co-op over the network**: play the campaign together on two
-  Vitas, online or ad hoc. The Xbox game only had split-screen co-op on
-  one console, so this is new work for the port.
-- **A relay** for networks that cannot connect to each other directly.
-- **QR code invites**: the host shows its lobby code as a QR code, and the
-  joiner scans it with the Vita's camera.
-- **A steady 30 fps** in the biggest fights.
-- **Loading**: a level start without the remaining few seconds of waiting.
+- **The main menu's music**, which the port doesn't currently play.
+- **Fullscreen and resolution options.** It runs at a native 1280x720;
+  there is a downscale lever on fragment cost if 60 fps in combat needs
+  one.
+- **16:9 movies shown at their own aspect ratio**, once there are movies.
 
 ## Help wanted
 
-Bug reports with crash dumps are the most useful contribution: see
-[Reporting a crash](README.md#reporting-a-crash-or-a-problem). Pull
-requests are welcome, especially for performance (the render on the
-Vita's first core), the open issues above, and testing multiplayer with
-two Vitas.
+Bug reports with logs are the most useful contribution. The game's own log
+is `sdmc:/haloce-nx/debug.txt`; the host's is `host.log` beside the NRO.
+Pull requests are welcome, especially for performance, and for Bink —
+that's the largest single piece of work left, and a partial decoder that
+plays the existing Xbox `.bik` files directly is more useful than a
+transcode.
