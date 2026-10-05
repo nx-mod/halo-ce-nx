@@ -21,6 +21,42 @@ void hostgl_glShaderSource(GLuint shader, GLsizei count, const unsigned long lon
 	glShaderSource(shader, count, pointers, lengths);
 }
 
+/* shader compiles and links, timed: one taking milliseconds in the
+middle of a frame is a hitch (a new effect's first appearance) */
+#include <switch.h>
+extern void logf_both(const char *fmt, ...);
+static double s_compile_ms_total;
+static unsigned s_compile_count, s_compile_logged;
+static void compile_time(const char *what, u64 start)
+{
+	double ms = (double)armTicksToNs(armGetSystemTick() - start) / 1000000.0;
+
+	s_compile_ms_total += ms;
+	s_compile_count++;
+	if (ms >= 2.0 && s_compile_logged < 60)
+	{
+		s_compile_logged++;
+		logf_both("GL %s took %.1f ms (%u compiles/links so far, %.0f ms in all)\n", what, ms,
+			s_compile_count, s_compile_ms_total);
+	}
+}
+
+void hostgl_glCompileShader(GLuint shader)
+{
+	u64 start = armGetSystemTick();
+
+	glCompileShader(shader);
+	compile_time("glCompileShader", start);
+}
+
+void hostgl_glLinkProgram(GLuint program)
+{
+	u64 start = armGetSystemTick();
+
+	glLinkProgram(program);
+	compile_time("glLinkProgram", start);
+}
+
 static const struct { const char *name; void *function; } kHostGlFunctions[] = {
 	{"hostgl_glGetIntegerv", (void *)glGetIntegerv},
 	{"hostgl_glCopyImageSubData", (void *)glCopyImageSubData},
@@ -99,14 +135,14 @@ static const struct { const char *name; void *function; } kHostGlFunctions[] = {
 	{"hostgl_glDrawElementsBaseVertex", (void *)glDrawElementsBaseVertex},
 	{"hostgl_glCreateShader", (void *)glCreateShader},
 	{"hostgl_glShaderSource", (void *)hostgl_glShaderSource},
-	{"hostgl_glCompileShader", (void *)glCompileShader},
+	{"hostgl_glCompileShader", (void *)hostgl_glCompileShader},
 	{"hostgl_glGetShaderiv", (void *)glGetShaderiv},
 	{"hostgl_glGetShaderInfoLog", (void *)glGetShaderInfoLog},
 	{"hostgl_glDeleteShader", (void *)glDeleteShader},
 	{"hostgl_glCreateProgram", (void *)glCreateProgram},
 	{"hostgl_glAttachShader", (void *)glAttachShader},
 	{"hostgl_glBindAttribLocation", (void *)glBindAttribLocation},
-	{"hostgl_glLinkProgram", (void *)glLinkProgram},
+	{"hostgl_glLinkProgram", (void *)hostgl_glLinkProgram},
 	{"hostgl_glGetProgramiv", (void *)glGetProgramiv},
 	{"hostgl_glGetProgramInfoLog", (void *)glGetProgramInfoLog},
 	{"hostgl_glUseProgram", (void *)glUseProgram},
