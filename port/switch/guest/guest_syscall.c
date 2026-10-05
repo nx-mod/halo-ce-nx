@@ -60,6 +60,7 @@ extern char __guest_heap_end[];
 #define SYS_exit_group 94
 #define SYS_futex 98
 #define SYS_nanosleep 101
+#define SYS_sched_yield 124
 #define SYS_clock_gettime 113
 #define SYS_clock_nanosleep 115
 #define SYS_gettimeofday 169
@@ -308,6 +309,13 @@ long __guest_syscall(long long n, long long a, long long b, long long c, long lo
 		}
 		return 0;
 	}
+	case SYS_sched_yield:
+		/* a real, brief sleep: returning at once left spin-waits (the
+		threaded tick's join, the cache lock) holding their core, and a
+		waiter on the same core as the thread it waited for never let it
+		run - the threaded tick hung at the main menu */
+		sleep_ns(20000);
+		return 0;
 	case SYS_nanosleep:
 		sleep_ns(timespec_ns((const int32_t *)(uintptr_t)a));
 		return 0;
