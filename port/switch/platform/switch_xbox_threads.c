@@ -134,11 +134,24 @@ void *__stdcall CreateEventA(void *security_attributes, int manual_reset, int in
 	return (void *)(uintptr_t)handle;
 }
 
-/* A mutex is an auto-reset event that starts signaled: WaitForSingleObject
-consumes the signal (acquire), ReleaseMutex puts it back. Not recursive,
-unlike Win32 - every caller (thread_win32.c's take_mutex, used by saved
-game files and bungie_net) waits with a timeout and checks the result,
-so a recursive take times out instead of deadlocking. */
+/* A mutex is an auto-reset event that starts signaled (signaled = free),
+plus Win32's ownership: the owning thread may take it again, and it is
+free once released as many times as taken. Without that, a nested take
+waited out thread_win32.c's timeout - an hour, for the saved game
+files' mutexes - with the UI's filesystem check thread running.
+Threads are told apart by their TLS block (host_get_guest_tp), which is
+unique per thread. Indexed by event handle (host_threads.c's 1-based
+table). */
+#define MAXIMUM_MUTEX_HANDLES 65
+static struct
+{
+	void *volatile owner;
+	int count;
+	char is_mutex;
+} mutex_state[MAXIMUM_MUTEX_HANDLES];
+
+extern void *host_get_guest_tp(void);
+
 void *__stdcall CreateMutexA(void *security_attributes, int initial_owner, const char *name)
 {
 	long handle;
@@ -146,16 +159,37 @@ void *__stdcall CreateMutexA(void *security_attributes, int initial_owner, const
 	(void)security_attributes;
 	(void)name;
 	handle = host_event_create(1);
-	if (!handle)
+	if (!handle || handle >= MAXIMUM_MUTEX_HANDLES)
 		return 0;
-	if (!initial_owner)
+	mutex_state[handle].is_mutex = 1;
+	mutex_state[handle].count = 0;
+	mutex_state[handle].owner = 0;
+	if (initial_owner)
+	{
+		mutex_state[handle].owner = host_get_guest_tp();
+		mutex_state[handle].count = 1;
+	}
+	else
+	{
 		host_event_signal(handle);
+	}
 	return (void *)(uintptr_t)handle;
 }
 
 int __stdcall ReleaseMutex(void *mutex)
 {
-	host_event_signal((long)(uintptr_t)mutex);
+	long handle = (long)(uintptr_t)mutex;
+
+	if (handle <= 0 || handle >= MAXIMUM_MUTEX_HANDLES || !mutex_state[handle].is_mutex ||
+		mutex_state[handle].owner != host_get_guest_tp())
+	{
+		return 0; /* ERROR_NOT_OWNER */
+	}
+	if (--mutex_state[handle].count == 0)
+	{
+		mutex_state[handle].owner = 0;
+		host_event_signal(handle);
+	}
 	return 1;
 }
 
@@ -178,9 +212,22 @@ static unsigned long wait_milliseconds_to_result(void *handle, unsigned long mil
 	waitSingle expect, (long long)-1 cast to u64 there is exactly
 	UINT64_MAX - "wait forever" - with no separate sentinel needed */
 	long long timeout_ns = (long long)(long)milliseconds * 1000000LL;
+	long index = (long)(uintptr_t)handle;
+	int is_mutex = index > 0 && index < MAXIMUM_MUTEX_HANDLES && mutex_state[index].is_mutex;
 
-	return host_event_wait((long)(uintptr_t)handle, timeout_ns) == 0 ? 0 /* WAIT_OBJECT_0 */
-		: 0x102 /* WAIT_TIMEOUT */;
+	if (is_mutex && mutex_state[index].owner == host_get_guest_tp())
+	{
+		mutex_state[index].count++;
+		return 0; /* WAIT_OBJECT_0: already ours */
+	}
+	if (host_event_wait(index, timeout_ns) != 0)
+		return 0x102; /* WAIT_TIMEOUT */
+	if (is_mutex)
+	{
+		mutex_state[index].owner = host_get_guest_tp();
+		mutex_state[index].count = 1;
+	}
+	return 0; /* WAIT_OBJECT_0 */
 }
 
 /* Mirrors port/linux/src/xbox_kernel.c's SleepEx. The cache code's async

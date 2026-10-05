@@ -162,9 +162,12 @@ unsigned long __stdcall XDeleteSaveGame(const char *, const unsigned short *)
 	return 0;
 }
 
+/* no saved games yet. 0 is not INVALID_HANDLE_VALUE: the game took it
+for a found save and read its never-written find data */
 void *__stdcall XFindFirstSaveGame(const char *, struct _XGAME_FIND_DATA *)
 {
-	return 0;
+	SetLastError(18); /* ERROR_NO_MORE_FILES */
+	return (void *)-1; /* INVALID_HANDLE_VALUE */
 }
 
 int __stdcall XFindNextSaveGame(void *, struct _XGAME_FIND_DATA *)
@@ -174,7 +177,7 @@ int __stdcall XFindNextSaveGame(void *, struct _XGAME_FIND_DATA *)
 
 int __stdcall XFindClose(void *)
 {
-	return 0;
+	return 1;
 }
 
 void *__stdcall XCalculateSignatureBegin(unsigned long)
