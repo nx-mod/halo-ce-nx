@@ -2093,8 +2093,22 @@ static void configure_sampler(int stage, BOOL mipmapped)
 	(texture_lod_bias) */
 	glSamplerParameterf(sampler, GL_TEXTURE_MIN_LOD, (float)state[D3DTSS_MAXMIPLEVEL]);
 	if (xgpu_capabilities.anisotropy)
-		glSamplerParameterf(sampler, GL_TEXTURE_MAX_ANISOTROPY_EXT,
-			(min_filter == D3DTEXF_ANISOTROPIC && state[D3DTSS_MAXANISOTROPY] > 1) ? (float)state[D3DTSS_MAXANISOTROPY] : 1.0f);
+	{
+		float level = (min_filter == D3DTEXF_ANISOTROPIC && state[D3DTSS_MAXANISOTROPY] > 1) ?
+			(float)state[D3DTSS_MAXANISOTROPY] : 1.0f;
+#ifdef HALO_SWITCH
+		/* display.anisotropy: at least this much for every mipmapped linear
+		texture, not only the few the game asks for - floors and walls seen
+		at a slant stay sharp. */
+		static long minimum = -1;
+
+		if (minimum < 0)
+			minimum = config_integer("display.anisotropy");
+		if (mip_filter != D3DTEXF_NONE && min_filter != D3DTEXF_POINT && (float)minimum > level)
+			level = (float)(minimum > 16 ? 16 : minimum);
+#endif
+		glSamplerParameterf(sampler, GL_TEXTURE_MAX_ANISOTROPY_EXT, level);
+	}
 	if (xgpu_capabilities.border_clamp)
 	{
 		color_to_vec4(state[D3DTSS_BORDERCOLOR], border);
@@ -3729,6 +3743,159 @@ static void write_screenshot(struct render_target_entry *target)
 	free(pixels);
 }
 
+#ifdef HALO_SWITCH
+/* ---------- the present's post pass (display.fxaa, display.sharpen)
+
+The back buffer reaches the window through this full-screen pass instead
+of a blit when either is on: FXAA (the console-quality, single-pass kind)
+against Halo's jagged edges, then contrast-adaptive sharpening in the
+manner of AMD's CAS, against the softness of the game's 852x480 layout
+drawn at 720p. One pass, nine taps at most. The renderer re-applies all of
+its GL state after every present (xgpu_gl_state_invalidate), so nothing
+here is restored except the vertex array binding, which it does not track. */
+
+static const char post_vertex_source[] =
+	"#version 300 es\n"
+	"out vec2 uv;\n"
+	"void main()\n"
+	"{\n"
+	"\tvec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);\n"
+	"\tgl_Position = vec4(p, 0.0, 1.0);\n"
+	/* row 0 of the render target is the top of the picture */
+	"\tuv = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5);\n"
+	"}\n";
+
+static const char post_fragment_source[] =
+	"#version 300 es\n"
+	"precision highp float;\n"
+	"uniform sampler2D source;\n"
+	"uniform vec2 texel;\n"
+	"uniform float fxaa;\n"
+	"uniform float sharpen;\n"
+	"in vec2 uv;\n"
+	"out vec4 color;\n"
+	"float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }\n"
+	"vec3 tap(vec2 offset) { return texture(source, uv + offset * texel).rgb; }\n"
+	"void main()\n"
+	"{\n"
+	"\tvec3 c = tap(vec2(0.0));\n"
+	"\tvec3 n = tap(vec2(0.0, -1.0)), s = tap(vec2(0.0, 1.0));\n"
+	"\tvec3 e = tap(vec2(1.0, 0.0)), w = tap(vec2(-1.0, 0.0));\n"
+	"\tif (fxaa > 0.5)\n"
+	"\t{\n"
+	"\t\tfloat l_nw = luma(tap(vec2(-1.0, -1.0))), l_ne = luma(tap(vec2(1.0, -1.0)));\n"
+	"\t\tfloat l_sw = luma(tap(vec2(-1.0, 1.0))), l_se = luma(tap(vec2(1.0, 1.0)));\n"
+	"\t\tfloat l_m = luma(c);\n"
+	"\t\tfloat l_min = min(l_m, min(min(l_nw, l_ne), min(l_sw, l_se)));\n"
+	"\t\tfloat l_max = max(l_m, max(max(l_nw, l_ne), max(l_sw, l_se)));\n"
+	"\t\tvec2 direction = vec2(-((l_nw + l_ne) - (l_sw + l_se)), (l_nw + l_sw) - (l_ne + l_se));\n"
+	"\t\tfloat reduce = max((l_nw + l_ne + l_sw + l_se) * (0.25 / 8.0), 1.0 / 128.0);\n"
+	"\t\tdirection = clamp(direction / (min(abs(direction.x), abs(direction.y)) + reduce), -8.0, 8.0);\n"
+	"\t\tvec3 a = 0.5 * (tap(direction * (1.0 / 3.0 - 0.5)) + tap(direction * (2.0 / 3.0 - 0.5)));\n"
+	"\t\tvec3 b = a * 0.5 + 0.25 * (tap(direction * -0.5) + tap(direction * 0.5));\n"
+	"\t\tfloat l_b = luma(b);\n"
+	"\t\tc = (l_b < l_min || l_b > l_max) ? a : b;\n"
+	"\t}\n"
+	"\tif (sharpen > 0.0)\n"
+	"\t{\n"
+	/* CAS: sharpen less where the neighbourhood already has contrast */
+	"\t\tvec3 lowest = min(c, min(min(n, s), min(e, w)));\n"
+	"\t\tvec3 highest = max(c, max(max(n, s), max(e, w)));\n"
+	"\t\tvec3 amount = sqrt(clamp(min(lowest, 1.0 - highest) / max(highest, vec3(1.0 / 256.0)), 0.0, 1.0));\n"
+	"\t\tvec3 weight = -amount * mix(0.125, 0.2, sharpen);\n"
+	"\t\tc = (c + (n + s + e + w) * weight) / (1.0 + 4.0 * weight);\n"
+	"\t}\n"
+	"\tcolor = vec4(clamp(c, 0.0, 1.0), 1.0);\n"
+	"}\n";
+
+static struct
+{
+	int ready; /* 0 not tried, 1 ready, -1 off or failed */
+	GLuint program, vertex_array, sampler;
+	GLint texel, fxaa, sharpen;
+	float fxaa_value, sharpen_value;
+} post_pass;
+
+static BOOL post_pass_prepare(void)
+{
+	GLuint vertex, fragment;
+	GLint linked = 0;
+
+	if (post_pass.ready)
+		return post_pass.ready > 0;
+	post_pass.ready = -1;
+	post_pass.fxaa_value = config_boolean("display.fxaa") ? 1.0f : 0.0f;
+	post_pass.sharpen_value = (float)config_real("display.sharpen");
+	if (post_pass.sharpen_value < 0.0f)
+		post_pass.sharpen_value = 0.0f;
+	if (post_pass.sharpen_value > 1.0f)
+		post_pass.sharpen_value = 1.0f;
+	if (post_pass.fxaa_value == 0.0f && post_pass.sharpen_value == 0.0f)
+	{
+		platform_log("post pass: off (display.fxaa and display.sharpen)");
+		return FALSE;
+	}
+	vertex = compile_shader(GL_VERTEX_SHADER, post_vertex_source, "post pass vertex");
+	fragment = compile_shader(GL_FRAGMENT_SHADER, post_fragment_source, "post pass fragment");
+	if (!vertex || !fragment)
+		return FALSE;
+	post_pass.program = glCreateProgram();
+	glAttachShader(post_pass.program, vertex);
+	glAttachShader(post_pass.program, fragment);
+	glLinkProgram(post_pass.program);
+	glGetProgramiv(post_pass.program, GL_LINK_STATUS, &linked);
+	if (!linked)
+	{
+		platform_log("post pass: the program did not link; presenting without it");
+		return FALSE;
+	}
+	glUseProgram(post_pass.program);
+	glUniform1i(glGetUniformLocation(post_pass.program, "source"), 0);
+	post_pass.texel = glGetUniformLocation(post_pass.program, "texel");
+	post_pass.fxaa = glGetUniformLocation(post_pass.program, "fxaa");
+	post_pass.sharpen = glGetUniformLocation(post_pass.program, "sharpen");
+	glGenVertexArrays(1, &post_pass.vertex_array);
+	glGenSamplers(1, &post_pass.sampler);
+	glSamplerParameteri(post_pass.sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glSamplerParameteri(post_pass.sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glSamplerParameteri(post_pass.sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glSamplerParameteri(post_pass.sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	platform_log("post pass: FXAA %s, sharpening %.2f", post_pass.fxaa_value > 0.0f ? "on" : "off",
+		post_pass.sharpen_value);
+	post_pass.ready = 1;
+	return TRUE;
+}
+
+/* the back buffer into the window's x, y, width, height (GL's window
+coordinates, y up); FALSE if the pass is off and the caller blits */
+static BOOL post_pass_present(GLuint texture, int source_width, int source_height, int x, int y, int width, int height)
+{
+	GLint vertex_array = 0;
+
+	if (!post_pass_prepare())
+		return FALSE;
+	glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertex_array);
+	glViewport(x, y, width, height);
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_SCISSOR_TEST);
+	glUseProgram(post_pass.program);
+	glUniform2f(post_pass.texel, 1.0f / (float)source_width, 1.0f / (float)source_height);
+	glUniform1f(post_pass.fxaa, post_pass.fxaa_value);
+	glUniform1f(post_pass.sharpen, post_pass.sharpen_value);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glBindSampler(0, post_pass.sampler);
+	glBindVertexArray(post_pass.vertex_array);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindVertexArray((GLuint)vertex_array);
+	glBindSampler(0, 0);
+	return TRUE;
+}
+#endif
+
 void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destination_rectangle,
 	void *unused, void *unused2)
 {
@@ -3790,6 +3957,10 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
 			glBindFramebuffer(GL_READ_FRAMEBUFFER, read_framebuffer);
+#ifdef HALO_SWITCH
+			if (!post_pass_present(back_buffer->target.texture, (int)back_buffer->target.gl_width,
+				(int)back_buffer->target.gl_height, x, y, width, height))
+#endif
 			/* row 0 of the render target is the top of the picture */
 			glBlitFramebuffer(0, 0, (GLint)back_buffer->target.gl_width, (GLint)back_buffer->target.gl_height,
 				x, y + height, x + width, y, GL_COLOR_BUFFER_BIT, GL_LINEAR);

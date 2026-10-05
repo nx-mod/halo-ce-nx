@@ -106,6 +106,17 @@ static const struct config_setting config_settings[] =
 		"cap. Above 30 only shows anything new with interpolation on; without\n"
 		"it the game draws 30 whatever this says. With vsync on, 0 means 60." },
 
+	{ "display.fxaa", _config_boolean, "true", "HALO_FXAA", _environment_value, _platform_switch,
+		"Smooth jagged edges (FXAA) as the picture reaches the screen. Costs the\n"
+		"GPU about a millisecond a frame, which it has to spare." },
+	{ "display.sharpen", _config_real, "0.4", "HALO_SHARPEN", _environment_value, _platform_switch,
+		"Sharpen the picture, 0.0 (off) to 1.0, adapting to the contrast already\n"
+		"there so edges do not ring. Offsets FXAA's slight softening and the\n"
+		"game's 480-line layout drawn at 720p." },
+	{ "display.anisotropy", _config_integer, "4", "HALO_ANISOTROPY", _environment_value, _platform_switch,
+		"Texture sharpness at a slant (floors, walls going into the distance):\n"
+		"1 is the original look; 2, 4, 8 or 16 keep them sharper." },
+
 	{ "overlay.enabled", _config_boolean, "true", "HALO_OVERLAY", _environment_value, _platform_switch,
 		"Show the frame rate overlay." },
 	{ "overlay.position", _config_string, "\"top\"", "HALO_OVERLAY_POSITION", _environment_value, _platform_switch,

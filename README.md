@@ -74,6 +74,9 @@ in `debug.txt` with the default used instead. Delete the file to start over.
 | `display.interpolation` | `true` | draws frames between the game's 30 ticks a second, for smooth motion above 30 fps; `false` draws 30 |
 | `display.frame_rate` | `60` | the cap: `60`, `30`, or `0` for none |
 | `display.vsync` | `true` | waits for the display; `false` presents at once (tearing), sleeping to the cap if there is one |
+| `display.fxaa` | `true` | smooths jagged edges (about 1 ms of GPU time) |
+| `display.sharpen` | `0.4` | contrast-adaptive sharpening, `0.0` to `1.0` |
+| `display.anisotropy` | `4` | texture sharpness at a slant: `1` (original), `2`, `4`, `8`, `16` |
 | `overlay.enabled` | `true` | the frame rate overlay |
 | `overlay.position` | `"top"` | `"top"` or `"bottom"` |
 | `overlay.frame_time` | `true` | the slowest frame of the last second, in ms — where a stutter shows |
