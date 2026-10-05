@@ -4,18 +4,73 @@ A native Nintendo Switch port of **Halo: Combat Evolved**, built from the
 Xbox decompilation. Not an emulator — the game's own code runs natively
 on the Switch's CPU, and its Direct3D rendering is translated to GLES3.
 
-**Status: early.** No build yet. See [PORTING.md](PORTING.md) for where
-things stand and what's left.
+**Status: playable.** On real hardware it boots to the main menu and plays
+the campaign with sound and controller input, at a 30 fps cap (about
+20–30 in combat). Still rough in places; see [Known issues](#known-issues)
+and [PORTING.md](PORTING.md).
 
 **No game data is included.** You need your own Xbox copy of Halo:
 Combat Evolved — the PC version's maps don't work.
 
+## Screenshots
+
+![The main menu, running on a Switch](port/switch/media/menu.jpg)
+
+[![A firefight, running on a Switch (click for the full-quality video)](port/switch/media/gameplay.gif)](port/switch/media/gameplay.mp4)
+
+*Captured on a Switch. The numbers along the top of the clip come from a
+performance overlay running alongside, not from the game.*
+
+## Installing
+
+1. Copy `host.nro` and `guest.elf` to `sdmc:/switch/halo-ce-nx-guest-poc/`.
+2. Put your game data in `sdmc:/haloce-nx/`: either the Xbox disc image
+   as `halo.xiso` (extracted to `maps/` on first launch, which takes a
+   while) or an already-extracted `maps/` folder. Copy the disc's
+   `default.xbe` there too; the loading screen's picture comes from it.
+3. Launch it from the homebrew menu.
+
+Saves, the map cache and `debug.txt` (the game's own log) go in
+`sdmc:/haloce-nx/`; `host.log` goes beside the NRO.
+
 ## Building
 
-Not yet functional for Switch. The source currently builds for Linux,
-Windows and the PS Vita (this repo's base); see those platforms'
-`port/*/README.md`. Switch build instructions will land here once
-`port/switch/` exists.
+Needs devkitPro (devkitA64 and libnx), Python 3 and Ninja. The game runs
+as a 32-bit-pointer (ILP32) guest inside a normal 64-bit homebrew host,
+so there are two builds:
+
+```sh
+# the guest: the game's objects, then a hand link
+python3 configure.py
+ninja switch_guest
+python3 -c "import pathlib; objs=sorted(pathlib.Path('build/switch/obj').rglob('*.o')); open('/tmp/game_objs.txt','w').write(''.join('\"%s\"\n'%o for o in objs))"
+aarch64-none-elf-gcc -mabi=ilp32 -nostdlib -ffreestanding -Wl,-T,port/switch/guest/guest.ld \
+  @/tmp/game_objs.txt port/switch/guest/guest_main.o port/switch/guest/guest_text_demo.o \
+  port/switch/guest/guest_syscall.o port/switch/guest/guest_tp.o \
+  port/switch/guest/guest_softfloat_stubs.o port/switch/guest/guest_stdio_shim.o \
+  port/switch/guest/guest_runtime_init.o port/switch/guest/guest_platform_stubs.o \
+  port/switch/guest/guest_pthread_stubs.o port/switch/guest/guest_syscall_cp.o \
+  port/switch/guest/build/musl/libc.a -o guest.elf -Wl,-e,__guest_entry
+
+# the host
+make -C port/switch/host -j2
+```
+
+`guest.elf` is not produced by Ninja; the link above is the only way to
+make it (see PORTING.md). The guest runtime objects in `port/switch/guest/`
+and its musl are built separately, as PORTING.md describes.
+
+## Known issues
+
+- **Hitches the first time an effect appears**: each new shader takes
+  10–70 ms to compile and link, and this driver can't cache compiled
+  programs. A precompiled shader pack is the next piece of work.
+- Text can look garbled for a moment while it loads, and some letters
+  show a thin box around them.
+- Decals (bullet holes, blood) can still appear late or briefly look wrong.
+- Shadows look a little off.
+- No intro movies (Bink video isn't supported); the game skips them.
+- Saves made with an older build may not load in a newer one.
 
 ## Credits
 
