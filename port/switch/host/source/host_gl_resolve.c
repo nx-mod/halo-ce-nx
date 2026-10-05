@@ -11,15 +11,7 @@ guest's widened string pointers */
 extern char hostgl_glShaderSource[];
 extern char hostgl_glCompileShader[];
 extern char hostgl_glGetShaderiv[];
-extern char hostgl_glGetShaderInfoLog[];
-extern char hostgl_glCreateProgram[];
-extern char hostgl_glAttachShader[];
-extern char hostgl_glBindAttribLocation[];
 extern char hostgl_glLinkProgram[];
-extern char hostgl_glGetProgramiv[];
-extern char hostgl_glGetProgramInfoLog[];
-extern char hostgl_glUseProgram[];
-extern char hostgl_glGetUniformLocation[];
 
 static const struct { const char *name; void *function; } kHostGlFunctions[] = {
 	{"hostgl_glGetIntegerv", (void *)glGetIntegerv},
@@ -101,16 +93,16 @@ static const struct { const char *name; void *function; } kHostGlFunctions[] = {
 	{"hostgl_glShaderSource", (void *)hostgl_glShaderSource},
 	{"hostgl_glCompileShader", (void *)hostgl_glCompileShader},
 	{"hostgl_glGetShaderiv", (void *)hostgl_glGetShaderiv},
-	{"hostgl_glGetShaderInfoLog", (void *)hostgl_glGetShaderInfoLog},
+	{"hostgl_glGetShaderInfoLog", (void *)glGetShaderInfoLog},
 	{"hostgl_glDeleteShader", (void *)glDeleteShader},
-	{"hostgl_glCreateProgram", (void *)hostgl_glCreateProgram},
-	{"hostgl_glAttachShader", (void *)hostgl_glAttachShader},
-	{"hostgl_glBindAttribLocation", (void *)hostgl_glBindAttribLocation},
+	{"hostgl_glCreateProgram", (void *)glCreateProgram},
+	{"hostgl_glAttachShader", (void *)glAttachShader},
+	{"hostgl_glBindAttribLocation", (void *)glBindAttribLocation},
 	{"hostgl_glLinkProgram", (void *)hostgl_glLinkProgram},
-	{"hostgl_glGetProgramiv", (void *)hostgl_glGetProgramiv},
-	{"hostgl_glGetProgramInfoLog", (void *)hostgl_glGetProgramInfoLog},
-	{"hostgl_glUseProgram", (void *)hostgl_glUseProgram},
-	{"hostgl_glGetUniformLocation", (void *)hostgl_glGetUniformLocation},
+	{"hostgl_glGetProgramiv", (void *)glGetProgramiv},
+	{"hostgl_glGetProgramInfoLog", (void *)glGetProgramInfoLog},
+	{"hostgl_glUseProgram", (void *)glUseProgram},
+	{"hostgl_glGetUniformLocation", (void *)glGetUniformLocation},
 	{"hostgl_glUniform1i", (void *)glUniform1i},
 	{"hostgl_glUniform1iv", (void *)glUniform1iv},
 	{"hostgl_glUniform1f", (void *)glUniform1f},

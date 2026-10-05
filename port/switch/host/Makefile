@@ -87,6 +87,11 @@ export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
 export DEPSDIR	:=	$(CURDIR)/$(BUILD)
 
 CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+# host_shader_cache.c is the disabled shader pack, kept in the tree for a driver
+# that shares programs. It is not built: it defines the same hostgl_gl* entry
+# points that host_shader_stats.c owns, so leaving it in would not just waste
+# 800 lines in the binary, it would fail to link.
+CFILES		:=	$(filter-out host_shader_cache.c,$(CFILES))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))

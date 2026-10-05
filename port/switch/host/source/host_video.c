@@ -42,6 +42,7 @@ static EGLSurface s_surface = EGL_NO_SURFACE;
 static EGLContext s_context = EGL_NO_CONTEXT;
 
 extern void logf_both(const char *fmt, ...);
+extern int host_gl_has_extension(const char *name);
 
 /* each distinct message once (up to 64), with how many frames in */
 extern volatile unsigned long g_host_swap_count;
@@ -95,6 +96,24 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 	text; the guest's own rendering needs it from here on */
 	consoleExit(NULL);
 
+	/* Mesa's own on-disk shader cache, before the driver reads its options.
+	Every mechanism this host had for the first-appearance hitch has now
+	failed on this driver - it offers no program binaries (0 formats, which is
+	why no sdmc:/haloce-nx/shader_cache was ever created), it does not share
+	programs between contexts (host_shader_cache.c's probe), and Mesa's own
+	disk cache does not exist on this path either: with these four lines
+	enabled and the game run twice, no sdmc:/haloce-nx/mesa_cache directory
+	ever appeared and the second start compiled 50 programs in 2979 ms
+	against 2886 ms for the first. nouveau compiles GLSL through TGSI, which
+	does not go through the NIR disk cache. So the hitch is not fixable in
+	software here and the game compiles its own shaders, which is where it
+	worked before the pack existed. Left in place, commented, in case a
+	later Mesa build cooperates. */
+	/* setenv("MESA_SHADER_CACHE_DISABLE", "false", 1);
+	setenv("MESA_SHADER_CACHE_MAX_SIZE", "512", 1);
+	setenv("MESA_GLSL_CACHE_MAX_SIZE", "512", 1);
+	setenv("XDG_CACHE_HOME", "sdmc:/haloce-nx/mesa_cache", 1); */
+
 	s_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 	if (s_display == EGL_NO_DISPLAY)
 		return 0;
@@ -112,18 +131,77 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 		return 0;
 	if (!eglMakeCurrent(s_display, s_surface, s_surface, s_context))
 		return 0;
-	/* the shader pack's worker compiles on core 2 from here on */
-	host_shader_pack_start(s_display, config, s_context);
+	/* DISABLED: the shader pack's worker. It has nothing to offer this driver -
+	see the note above the (commented) MESA_* lines and
+	tools/switch_gl_resolve.py's CACHE_FUNCTIONS, which is empty for the same
+	reason. Leaving this call in costs ~5 s of startup and writes a
+	shader_pack.bin that nothing can read. */
+	/* host_shader_pack_start(s_display, config, s_context); */
 	/* the driver's own account of any GL call it rejects - the renderer
 	never checks glGetError, so a rejected texture format or vertex
 	attribute fails silently otherwise */
-	/* a steady 30: the game ticks at 30 Hz, as on the Xbox, and frames
-	presented as fast as possible against a 60 Hz display (with no
-	interpolation between ticks) arrived unevenly - stutter */
-	eglSwapInterval(s_display, 2);
+	/* How many vsyncs to wait between presents, from the frame cap below. The
+	panel is 60 Hz, so a cap of 30 is two vsyncs and 60 is one.
+
+	Note that 30 is not the ceiling: the guest already renders interpolated
+	frames at the display's rate (source/main/main.c calls
+	render_interpolation_frame_begin/end around main_game_render, and
+	display.interpolation defaults to true), so it has something new to show
+	every 60 Hz refresh. Waiting two vsyncs threw those frames away. The
+	comment this replaced claimed interval 1 stuttered, because presenting a
+	30 Hz simulation as fast as the display allows repeats frames unevenly -
+	which is what the interpolator is there to prevent. */
+
+#define HOST_PRESENT_FPS_CAP 60
+
+/* Read from the SD card so it can be changed without a rebuild: 30, 60, or 0
+	for uncapped (no waiting at all, so the frame rate becomes whatever the
+	renderer manages). Any other positive number is taken as a vsync count,
+	which is 1 for 60 and 2 for 30 on this panel. Absent or nonsense means
+	HOST_PRESENT_FPS_CAP. */
+	{
+		static const char *const PRESENT_PATH = "sdmc:/haloce-nx/present.txt";
+		int cap = HOST_PRESENT_FPS_CAP;
+		int from_file = 0;
+		int interval;
+		FILE *file = fopen(PRESENT_PATH, "r");
+
+		if (file)
+		{
+			int requested = 0;
+
+			if (fscanf(file, "%d", &requested) == 1 && requested >= 0 && requested <= 240)
+			{
+				cap = requested;
+				from_file = 1;
+			}
+			else
+				logf_both("present: ignoring %s (expected 30, 60, or 0 for uncapped)\n", PRESENT_PATH);
+			fclose(file);
+		}
+		interval = cap == 0 ? 0 : cap <= 30 ? 2 : cap <= 60 ? 1 : 2;
+		logf_both("present: capped at %d fps (%d vsync(s) between frames)%s\n", cap, interval,
+			from_file ? ", from the SD card" : "");
+		eglSwapInterval(s_display, interval);
+	}
 	glEnable(GL_DEBUG_OUTPUT);
 	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 	glDebugMessageCallback(gl_debug_message, NULL);
+	/* what the driver will and will not do, once, rather than inferred from
+	absent directories later */
+	{
+		GLint formats = 0;
+		const char *vendor = (const char *)glGetString(GL_VENDOR);
+		const char *renderer = (const char *)glGetString(GL_RENDERER);
+		const char *version = (const char *)glGetString(GL_VERSION);
+
+		glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &formats);
+		logf_both("GL: %s / %s / %s - %d program binary formats, %s\n", vendor ? vendor : "?",
+			renderer ? renderer : "?", version ? version : "?", (int)formats,
+			host_gl_has_extension("GL_ARB_get_program_binary") ||
+			host_gl_has_extension("GL_AMD_shader_binary_format") ?
+			"binary extension present" : "no binary extension");
+	}
 	{
 		int w = 0, h = 0;
 
@@ -213,6 +291,7 @@ void platform_video_swap(void)
 
 		platform_video_drawable_size(&w, &h);
 		host_loading_text_draw(w, h);
+		host_fps_draw(w, h);
 	}
 	if (!eglSwapBuffers(s_display, s_surface) && failure_count < 5)
 	{
