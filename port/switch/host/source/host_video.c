@@ -28,6 +28,7 @@ startup/error logging first.
 #include <stdlib.h>
 #include <string.h>
 #include <switch.h>
+#include <sys/stat.h>
 
 #include <EGL/egl.h>
 #include <GLES3/gl32.h>
@@ -133,6 +134,17 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 	setenv("MESA_GLSL_CACHE_MAX_SIZE", "512", 1);
 	setenv("XDG_CACHE_HOME", "sdmc:/haloce-nx/mesa_cache", 1); */
 
+#ifdef HOST_ZINK
+	/* nxvk (Zink over NVK, Mesa 26). NVK runs on this GPU (GM20B) only on
+	request; and Mesa's own shader disk cache, which the old driver lacked,
+	keeps every compiled shader on the SD card for the next launch - the
+	cache this port could not have before, and one that can be shipped */
+	setenv("NVK_I_WANT_A_BROKEN_VULKAN_DRIVER", "1", 1);
+	mkdir("sdmc:/haloce-nx/mesa_shader_cache", 0777);
+	setenv("MESA_SHADER_CACHE_DIR", "sdmc:/haloce-nx/mesa_shader_cache", 1);
+	setenv("MESA_SHADER_CACHE_MAX_SIZE", "256M", 1);
+	logf_both("GL: nxvk (Zink over NVK); shader cache in sdmc:/haloce-nx/mesa_shader_cache\n");
+#endif
 	s_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 	if (s_display == EGL_NO_DISPLAY)
 		return 0;

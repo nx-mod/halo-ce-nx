@@ -39,6 +39,16 @@ include $(DEVKITPRO)/libnx/switch_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
+
+# make ZINK=1: the same host on nxvk's OpenGL ES (Zink over the NVK Vulkan
+# driver, Mesa 26 - github.com/nx-mod/nxvk) instead of devkitPro's Mesa 20.1
+# nouveau. A separate host_zink.nro and build directory, so both can sit
+# beside the one guest.elf and be launched in turn.
+ifeq ($(ZINK),1)
+TARGET		:=	host_zink
+BUILD		:=	build_zink
+DEFINES		+=	-DHOST_ZINK=1
+endif
 SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include ../../linux/src source
@@ -62,7 +72,15 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
+ifeq ($(ZINK),1)
+# nxvk-gl.pc's Libs: the driver's dispatch tables are only reached by runtime
+# string lookup, so it is linked whole and its ICD entry point kept
+LIBS	:= -Wl,--whole-archive -lnvk_gl -lnvk -Wl,--no-whole-archive \
+			-Wl,--start-group -lnvk_support -lz -lexpat -Wl,--end-group \
+			-Wl,-u,vk_icdGetInstanceProcAddr -lnx -lstdc++ -lm
+else
 LIBS	:= -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lnx -lstdc++ -lm
+endif
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
