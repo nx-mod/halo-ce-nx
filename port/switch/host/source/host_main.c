@@ -179,6 +179,7 @@ static const struct host_function kHostFunctions[] = {
 	{"host_pread", (void *)host_pread},
 	{"host_pwrite", (void *)host_pwrite},
 	{"host_loading_text_stop", (void *)host_loading_text_stop},
+	{"host_video_configure", (void *)host_video_configure},
 	{"posix_stat", (void *)posix_stat},
 	{"posix_fstat", (void *)posix_fstat},
 	{"posix_set_file_times", (void *)posix_set_file_times},

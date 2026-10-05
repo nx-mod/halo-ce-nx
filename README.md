@@ -5,8 +5,9 @@ Xbox decompilation. Not an emulator — the game's own code runs natively
 on the Switch's CPU, and its Direct3D rendering is translated to GLES3.
 
 **Status: playable.** On real hardware it boots to the main menu and plays
-the campaign with sound and controller input, at 60 fps (about 30 in
-combat — see [Frame rate](#frame-rate)). Still rough in places; see
+the campaign with sound and controller input, at up to 60 fps with
+interpolation (around 30 in heavy combat; see [Settings](#settings)). Still
+rough in places; see
 [Known issues](#known-issues) and [PORTING.md](PORTING.md).
 
 **No game data is included.** You need your own Xbox copy of Halo:
@@ -18,8 +19,8 @@ Combat Evolved — the PC version's maps don't work.
 
 [![A firefight, running on a Switch (click for the full-quality video)](port/switch/media/gameplay.gif)](port/switch/media/gameplay.mp4)
 
-*Captured on a Switch. The numbers along the top of the clip come from the
-overlay described under [Frame rate](#frame-rate).*
+*Captured on a Switch. The numbers along the top of the clip come from a
+performance overlay running alongside, not from the game.*
 
 ## Installing
 
@@ -60,28 +61,29 @@ make -C port/switch/host -j2
 make it (see PORTING.md). The guest runtime objects in `port/switch/guest/`
 and its musl are built separately, as PORTING.md describes.
 
-## Frame rate
+## Settings
 
-Presented at **60 fps**, which the display's rate allows because the game
-renders interpolated frames between its 30 Hz simulation ticks. In combat
-it settles around 30, because rendering a frame costs about as much as a
-tick does and the interpolator re-poses every object to draw one.
+The game writes `sdmc:/haloce-nx/config.toml` on its first launch, with
+every setting at its default and a comment explaining it. Edit it with any
+text editor; changes apply at the next launch. Your edits and comments are
+kept, settings a newer version adds are appended, and a mistake is reported
+in `debug.txt` with the default used instead. Delete the file to start over.
 
-The cap is a setting, not a constant. Put a number in
-`sdmc:/haloce-nx/present.txt`:
+| setting | default | what it does |
+|---|---|---|
+| `display.interpolation` | `true` | draws frames between the game's 30 ticks a second, for smooth motion above 30 fps; `false` draws 30 |
+| `display.frame_rate` | `60` | the cap: `60`, `30`, or `0` for none |
+| `display.vsync` | `true` | waits for the display; `false` presents at once (tearing), sleeping to the cap if there is one |
+| `overlay.enabled` | `true` | the frame rate overlay |
+| `overlay.position` | `"top"` | `"top"` or `"bottom"` |
+| `overlay.frame_time` | `true` | the slowest frame of the last second, in ms — where a stutter shows |
+| `overlay.shaders` | `true` | shader compiles finished/started; a gap is a hitch in progress |
+| `audio.enabled`, `audio.volume` | `true`, `1.0` | sound, and its volume from 0.0 to 1.0 |
+| `game.language` | `""` | `"ja"`, `"de"`, `"fr"`, `"es"` or `"it"`; empty for English |
+| `debug.gl_debug` | `false` | logs the GL driver's error messages (slower) |
+| `debug.memory_watch_*` | | how often game memory is rechecked for changes the GPU needs; see the file's comments |
 
-| value | effect |
-|---|---|
-| `30` | one present per two vsyncs — the original behaviour |
-| `60` | one present per vsync (the default) |
-| `0` | no waiting at all, so you see whatever the renderer manages |
-
-With the file absent the cap is `HOST_PRESENT_FPS_CAP` in
-[`host_video.c`](port/switch/host/source/host_video.c).
-
-An overlay at the top of the screen reports the frame rate and how many
-shaders have compiled, as `FPS  done/issued` — the two shader numbers
-converge when nothing is compiling.
+The overlay reads like `58 FPS  41 MS  212/212`.
 
 ## Known issues
 

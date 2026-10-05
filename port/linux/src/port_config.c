@@ -14,12 +14,21 @@ it exists, so that the player's edits and comments stay.
 #include "port_config.h"
 #include "tomlc17.h"
 
+#ifndef HALO_SWITCH
 #include <SDL3/SDL.h>
+#endif
 #include <ctype.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef HALO_SWITCH
+/* musl's own fopen, on the file's real sdmc: path: the game's (msvc_crt.c)
+translates d:\ through platform_data_root, which asks this file for
+paths.data - from inside the first question, with config_lock held */
+#undef fopen
+#endif
 
 /* bumped when a setting held in the environment changes mid-game (the
 Vita's settings panel): the port's quality knobs that cache their
@@ -53,8 +62,17 @@ enum
 {
 	_platform_desktop = 1,
 	_platform_android = 2,
+	_platform_switch = 4,
 	_platform_all = _platform_desktop | _platform_android,
+	_platform_everywhere = _platform_all | _platform_switch,
 };
+
+/* the folder holding the maps folder: on Switch the data root is fixed */
+#ifdef HALO_SWITCH
+#define PATHS_DATA_DEFAULT "\"sdmc:/haloce-nx\""
+#else
+#define PATHS_DATA_DEFAULT "\"\""
+#endif
 
 struct config_setting
 {
@@ -78,15 +96,30 @@ static const struct config_setting config_settings[] =
 	{ "display.screen_width", _config_integer, "0", "HALO_SCREEN_WIDTH", _environment_value, _platform_android,
 		"Columns of the 480-line picture: 0 for the display's shape, 640 for the\n"
 		"Xbox's 4:3." },
-	{ "display.vsync", _config_boolean, "true", "HALO_NO_VSYNC", _environment_set_is_false, _platform_all,
+	{ "display.vsync", _config_boolean, "true", "HALO_NO_VSYNC", _environment_set_is_false, _platform_everywhere,
 		"Wait for the display between frames; false draws as fast as possible." },
-	{ "display.interpolation", _config_boolean, "true", "HALO_INTERPOLATION", _environment_value, _platform_all,
+	{ "display.interpolation", _config_boolean, "true", "HALO_INTERPOLATION", _environment_value, _platform_everywhere,
 		"Draw a frame for every display refresh, blending between the game's 30\n"
 		"ticks a second; false keeps the original 30 frames a second." },
+	{ "display.frame_rate", _config_integer, "60", "HALO_FRAME_RATE", _environment_value, _platform_switch,
+		"Frames a second at most: 60, 30 (the game's own tick rate), or 0 for no\n"
+		"cap. Above 30 only shows anything new with interpolation on; without\n"
+		"it the game draws 30 whatever this says. With vsync on, 0 means 60." },
 
-	{ "audio.enabled", _config_boolean, "true", "HALO_NO_AUDIO", _environment_set_is_false, _platform_all,
+	{ "overlay.enabled", _config_boolean, "true", "HALO_OVERLAY", _environment_value, _platform_switch,
+		"Show the frame rate overlay." },
+	{ "overlay.position", _config_string, "\"top\"", "HALO_OVERLAY_POSITION", _environment_value, _platform_switch,
+		"Where the overlay sits: \"top\" or \"bottom\" of the screen, centered." },
+	{ "overlay.frame_time", _config_boolean, "true", "HALO_OVERLAY_FRAME_TIME", _environment_value, _platform_switch,
+		"Show the slowest frame of the last second in milliseconds (MS): the\n"
+		"number that a stutter shows up in, where the frame rate averages it away." },
+	{ "overlay.shaders", _config_boolean, "true", "HALO_OVERLAY_SHADERS", _environment_value, _platform_switch,
+		"Show shader compiles, finished/started. They match when nothing is\n"
+		"compiling; a gap is the driver busy, which is a hitch." },
+
+	{ "audio.enabled", _config_boolean, "true", "HALO_NO_AUDIO", _environment_set_is_false, _platform_everywhere,
 		"Play sound." },
-	{ "audio.volume", _config_real, "1.0", "HALO_VOLUME", _environment_value, _platform_all,
+	{ "audio.volume", _config_real, "1.0", "HALO_VOLUME", _environment_value, _platform_everywhere,
 		"The volume of everything, 0.0 to 1.0." },
 
 	{ "input.mouse_sensitivity", _config_real, "1.0", "HALO_MOUSE_SENSITIVITY", _environment_value, _platform_desktop,
@@ -94,11 +127,11 @@ static const struct config_setting config_settings[] =
 	{ "input.invert_mouse", _config_boolean, "false", "HALO_MOUSE_INVERT", _environment_set_is_true, _platform_desktop,
 		"Moving the mouse forward looks down." },
 
-	{ "game.language", _config_string, "\"\"", "HALO_LANGUAGE", _environment_value, _platform_all,
+	{ "game.language", _config_string, "\"\"", "HALO_LANGUAGE", _environment_value, _platform_everywhere,
 		"The language the game asks the Xbox for: \"ja\", \"de\", \"fr\", \"es\" or \"it\";\n"
 		"empty for English. The game data decides what is translated." },
 
-	{ "paths.data", _config_string, "\"\"", "HALO_DATA_ROOT", _environment_value, _platform_desktop,
+	{ "paths.data", _config_string, PATHS_DATA_DEFAULT, "HALO_DATA_ROOT", _environment_value, _platform_desktop,
 		"The folder holding the game data's maps folder; empty looks in the\n"
 		"working directory and its assets folder. Windows paths are easiest in\n"
 		"single quotes: 'C:\\Games\\Halo'." },
@@ -187,7 +220,7 @@ static const struct config_setting config_settings[] =
 		"Keep the window hidden (and never fullscreen)." },
 	{ "debug.null_renderer", _config_boolean, "false", "HALO_NULL_RENDERER", _environment_set_is_true, _platform_all,
 		"Run without a window, drawing nothing." },
-	{ "debug.gl_debug", _config_boolean, "false", "HALO_GL_DEBUG", _environment_set_is_true, _platform_all,
+	{ "debug.gl_debug", _config_boolean, "false", "HALO_GL_DEBUG", _environment_set_is_true, _platform_everywhere,
 		"Report OpenGL errors in the log." },
 	{ "debug.gpu_stats", _config_boolean, "false", "HALO_GPU_STATS", _environment_set_is_true, _platform_all,
 		"Log the renderer's draw counts once a second." },
@@ -218,11 +251,27 @@ static const struct config_setting config_settings[] =
 	{ "debug.sample_seconds", _config_real, "0.0", "HALO_SAMPLE", _environment_value, _platform_android,
 		"Log where every game thread is this often, in seconds (read by the\n"
 		"app, port/android/host/host_debug.c); 0 never." },
+	{ "debug.memory_watch_shift", _config_integer, "1", "HALO_MEMORY_WATCH_SHIFT", _environment_value,
+		_platform_switch,
+		"How often unchanged game memory is checked for changes the GPU's copy\n"
+		"needs: every 2^n frames, 0 to 8. Higher is cheaper, but a texture or\n"
+		"decal the game rewrites can show stale for up to that many frames\n"
+		"(port/switch/platform/switch_memory_watch.c)." },
+	{ "debug.memory_watch_vertices", _config_boolean, "true", "HALO_MEMORY_WATCH_VERTICES", _environment_value,
+		_platform_switch,
+		"Check vertex data every frame regardless: decals drawn late or in the\n"
+		"wrong place for a frame otherwise." },
+	{ "debug.memory_watch_file_cache_shift", _config_integer, "5", "HALO_MEMORY_WATCH_FILE_CACHE_SHIFT",
+		_environment_value, _platform_switch,
+		"The same for the tag, texture and sound caches, which change only when\n"
+		"the game reads a file into them (and are checked at once then)." },
 };
 
 #define NUMBER_OF_CONFIG_SETTINGS (sizeof(config_settings) / sizeof(config_settings[0]))
 
-#ifdef HALO_NOT_DESKTOP
+#if defined(HALO_SWITCH)
+#define CONFIG_PLATFORM _platform_switch
+#elif defined(HALO_NOT_DESKTOP)
 #define CONFIG_PLATFORM _platform_android
 #else
 #define CONFIG_PLATFORM _platform_desktop
@@ -244,7 +293,10 @@ static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void config_path(char *path, size_t size)
 {
-#ifdef HALO_NOT_DESKTOP
+#if defined(HALO_SWITCH)
+	/* beside the maps folder, with the saves */
+	snprintf(path, size, "sdmc:/haloce-nx/config.toml");
+#elif defined(HALO_NOT_DESKTOP)
 	/* the data folder, which the app names (port/android/host/host_main.c) */
 	const char *root = getenv("HALO_DATA_ROOT");
 
@@ -399,13 +451,18 @@ static char *config_default_text(void)
 	char section[32] = "";
 	size_t index;
 
-#ifdef HALO_NOT_DESKTOP
+#if defined(HALO_SWITCH)
 	config_append(&text,
-		"# Halo settings\n"
+		"# Halo: Combat Evolved for Switch - settings\n"
 		"#\n"
+		"# Read when the game starts, so changes take effect at the next launch.\n"
 		"# The game writes this file with the defaults when it is missing: delete\n"
-		"# it to go back to them.\n");
-#else
+		"# it to go back to them. Your edits and comments are kept, and settings\n"
+		"# a newer version adds are appended. Mistakes are reported in debug.txt\n"
+		"# and the default is used instead.\n"
+		"#\n"
+		"# true/false need no quotes; words (like \"top\") need double quotes.\n");
+#elif defined(HALO_NOT_DESKTOP)
 	config_append(&text,
 		"# Halo settings\n"
 		"#\n"

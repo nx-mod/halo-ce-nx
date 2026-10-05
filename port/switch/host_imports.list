@@ -27,6 +27,7 @@ host_rename
 host_pread
 host_pwrite
 host_loading_text_stop
+host_video_configure
 posix_stat
 posix_fstat
 posix_set_file_times

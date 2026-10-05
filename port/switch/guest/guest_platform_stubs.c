@@ -37,52 +37,10 @@ void platform_show_message(const char *title, const char *message)
 	platform_log("%s: %s", title ? title : "", message ? message : "");
 }
 
-/* port/linux/src/port_config.c's cvar system, not ported yet - every
-setting reports its "off"/zero default rather than reading real config,
-with the deliberate exceptions below. */
-int config_boolean(const char *name)
-{
-	/* dsound_sdl.c's audio_start checks this before even trying
-	host_audio_open - real audio should just work by default on a real
-	console with real speakers, not stay silent until some config
-	system that doesn't exist yet turns it on (PORTING.md's "wire in
-	audio/controls" milestone) */
-	if (!strcmp(name, "audio.enabled"))
-		return 1;
-	(void)name;
-	return 0;
-}
-
-/* port/linux/src/port_config.c's defaults where they aren't zero and
-matter here: audio.volume 0 is dsound_sdl.c's master volume - the mixer
-ran but every sample came out 0 */
-double config_real(const char *name)
-{
-	if (!strcmp(name, "audio.volume"))
-		return 1.0;
-	return 0.0;
-}
-
-const char *config_string(const char *name)
-{
-	/* xbox_files.c's platform_data_root() checks this first, before any
-	of its desktop-only auto-detection (readlink /proc/self/exe, cwd
-	has-maps probing - meaningless on Switch); answering here skips all
-	of that and points it straight at the game data this host's own
-	xiso extraction (host_main.c's GAME_DATA_DIR) already populates. */
-	if (!strcmp(name, "paths.data"))
-		return "sdmc:/haloce-nx";
-	(void)name;
-	return "";
-}
-
-long config_integer(const char *name)
-{
-	/* -1 is off; 0 would trace the first frame's every draw */
-	if (!strcmp(name, "debug.gpu_trace_frame"))
-		return -1;
-	return 0;
-}
+/* config_boolean/integer/real/string are port/linux/src/port_config.c's,
+reading sdmc:/haloce-nx/config.toml (it was stubs answering defaults
+here, which left display.interpolation and display.vsync reading false) */
+int config_boolean(const char *name);
 
 /* d3d8_gl.c's screen_mode_choose: the display the game fills. From it the
 game picks its layout width (852 for 16:9 at its fixed 480 lines) and the
@@ -108,12 +66,17 @@ void halo_d3d_stream_attribute(long reg, long stream)
 	(void)stream;
 }
 
-/* frames between the 30 Hz ticks at the display's refresh rate -
-port/linux/include/halo_linux_source_fixups.h; the real backend reads
-display.interpolation itself once config_boolean is real */
+/* frames between the 30 Hz ticks at the display's refresh rate
+(port/linux/game/render_interpolation.c), as sdl_platform.c answers it on
+the other ports. This answered 0 while config_boolean was a stub: every
+frame between two ticks was the same picture drawn again. */
 int halo_interpolation_enabled(void)
 {
-	return 0;
+	static int enabled = -1;
+
+	if (enabled < 0)
+		enabled = config_boolean("display.interpolation");
+	return enabled;
 }
 
 /* source/game/player_control.c - no real gamepad-as-mouse backend yet
@@ -126,11 +89,7 @@ int halo_linux_mouse_look(short gamepad_index, float *yaw, float *pitch)
 	return 0;
 }
 
-/* source/main.c and friends: a generation counter bumped whenever a
-display/audio/input setting changes, so callers can re-read it once.
-config_boolean/real/string/integer above never report a change, so
-this never needs to move either. */
-volatile unsigned long halo_settings_generation;
+/* (halo_settings_generation is port_config.c's now) */
 
 /* real now (not a constant 0): AArch64's own CNTPCT_EL0/CNTFRQ_EL0
 system counter, the same ordinary EL0 (no host import needed) register
@@ -155,6 +114,17 @@ unsigned long long vita_host_time_us(void)
 	worth assuming either) could turn into a zero divisor. tick*1e6
 	only overflows 64 bits past ~11 continuous days of uptime. */
 	return frequency ? (tick * 1000000ULL) / frequency : 0;
+}
+
+/* main.c's frame cap without interpolation (a frame per 30 Hz tick, not the
+same picture again), which it only applies when this exists */
+void vita_host_sleep_us(unsigned long microseconds)
+{
+	struct timespec duration;
+
+	duration.tv_sec = (time_t)(microseconds / 1000000UL);
+	duration.tv_nsec = (long)(microseconds % 1000000UL) * 1000L;
+	nanosleep(&duration, NULL);
 }
 
 /* xinput_sdl.c's test-input debug hook (SDL path, unused on Switch -

@@ -119,7 +119,7 @@ static const char *kFragmentSource =
 
 static int s_frames_left = LOADING_TEXT_FRAMES;
 static int s_failed;
-static GLuint s_program, s_vao, s_vbo;
+static GLuint s_program;
 static GLint s_offset_location = -1;
 
 static GLuint compile(GLenum stage, const char *source)
@@ -156,8 +156,6 @@ static int build_program(void)
 	if (!ok)
 		return 0;
 	s_offset_location = glGetUniformLocation(s_program, "uOffset");
-	glGenVertexArrays(1, &s_vao);
-	glGenBuffers(1, &s_vbo);
 	return 1;
 }
 
@@ -166,16 +164,28 @@ target. The font is measured off the glyph height, so one call serves both
 the startup text (20 px, centered, at 2/3 down) and the frame counter (14 px,
 pinned to a corner). */
 #define OVERLAY_TEXT_MAXIMUM 32
-static char s_text[OVERLAY_TEXT_MAXIMUM];
-static int s_vertex_count;
-static int s_built_width, s_built_height;
-static float s_built_glyph, s_built_left, s_built_bottom;
 
-static int build_vertices(const char *text, int width, int height, float left, float bottom,
+/* one per string on screen. The startup text and the frame counter shared a
+single buffer: while both were up, each frame rebuilt it for the startup
+text, and the counter's in-between frames drew that instead of the counter -
+which showed only on the frame each second that rebuilt it, a flicker */
+struct overlay_text
+{
+	GLuint vao, vbo;
+	char text[OVERLAY_TEXT_MAXIMUM];
+	int vertex_count;
+	int built_width, built_height;
+	float built_glyph, built_left, built_bottom;
+};
+
+static struct overlay_text s_loading, s_counter;
+
+static int build_vertices(struct overlay_text *overlay, int width, int height, float left, float bottom,
 	float glyph_height)
 {
 	float vertices[OVERLAY_TEXT_MAXIMUM * MAXIMUM_SEGMENTS_PER_GLYPH * 4];
 	const float glyph_width = glyph_height * 0.65f, advance = glyph_height * 0.9f;
+	const char *text = overlay->text;
 	const int length = (int)strlen(text);
 	int count = 0;
 	int i;
@@ -195,38 +205,42 @@ static int build_vertices(const char *text, int width, int height, float left, f
 			vertices[count++] = (bottom + segments[s].y1 * glyph_height) / (float)height * 2.0f - 1.0f;
 		}
 	}
-	glBindBuffer(GL_ARRAY_BUFFER, s_vbo);
+	if (!overlay->vbo)
+	{
+		glGenVertexArrays(1, &overlay->vao);
+		glGenBuffers(1, &overlay->vbo);
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, overlay->vbo);
 	glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(count * sizeof(float)), vertices, GL_STATIC_DRAW);
-	glBindVertexArray(s_vao);
+	glBindVertexArray(overlay->vao);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (const void *)0);
-	s_vertex_count = count / 2;
+	overlay->vertex_count = count / 2;
 	return count > 0;
 }
 
 /* re-uploads only when the string or the placement changed; the frame counter
-changes its text about once a second, which is not worth a rebuild each frame.
-Placement has to be part of the test: the startup text and the frame counter
-share this one buffer, and they are different sizes in different places, so
-comparing the string alone would draw the counter at the startup text's size. */
-static int set_text(const char *text, int width, int height, float left, float bottom, float glyph_height)
+changes its text about once a second, which is not worth a rebuild each frame */
+static int set_text(struct overlay_text *overlay, const char *text, int width, int height, float left, float bottom,
+	float glyph_height)
 {
-	if (!strcmp(s_text, text) && width == s_built_width && height == s_built_height &&
-		glyph_height == s_built_glyph && left == s_built_left && bottom == s_built_bottom)
+	if (!strcmp(overlay->text, text) && width == overlay->built_width && height == overlay->built_height &&
+		glyph_height == overlay->built_glyph && left == overlay->built_left && bottom == overlay->built_bottom)
 	{
-		return s_vertex_count > 0;
+		return overlay->vertex_count > 0;
 	}
-	snprintf(s_text, sizeof(s_text), "%s", text);
-	s_built_width = width;
-	s_built_height = height;
-	s_built_glyph = glyph_height;
-	s_built_left = left;
-	s_built_bottom = bottom;
-	return build_vertices(s_text, width, height, left, bottom, glyph_height);
+	snprintf(overlay->text, sizeof(overlay->text), "%s", text);
+	overlay->built_width = width;
+	overlay->built_height = height;
+	overlay->built_glyph = glyph_height;
+	overlay->built_left = left;
+	overlay->built_bottom = bottom;
+	return build_vertices(overlay, width, height, left, bottom, glyph_height);
 }
 
-/* draws whatever set_text last uploaded, over the game's own rendering */
-static void draw_overlay(int width, int height)
+/* draws what set_text last uploaded for this string, over the game's own
+rendering */
+static void draw_overlay(const struct overlay_text *overlay, int width, int height)
 {
 	GLint program, vao, array_buffer, framebuffer, viewport[4];
 	GLboolean depth, blend, scissor, cull, stencil, color_mask[4];
@@ -253,13 +267,13 @@ static void draw_overlay(int width, int height)
 	glDisable(GL_STENCIL_TEST);
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 	glUseProgram(s_program);
-	glBindVertexArray(s_vao);
+	glBindVertexArray(overlay->vao);
 	/* two 1-pixel offsets: slightly bolder strokes without glLineWidth */
 	for (pass = 0; pass < 2; pass++)
 	{
 		glUniform2f(s_offset_location, (float)(pass & 1) * 2.0f / (float)width,
 			(float)(pass >> 1) * 2.0f / (float)height);
-		glDrawArrays(GL_LINES, 0, s_vertex_count);
+		glDrawArrays(GL_LINES, 0, overlay->vertex_count);
 	}
 
 	glBindVertexArray((GLuint)vao);
@@ -310,12 +324,12 @@ void host_loading_text_draw(int width, int height)
 	s_frames_left--;
 	if (!ensure_program())
 		return;
-	if (!set_text(LOADING_TEXT, width, height, left, bottom, glyph_height))
+	if (!set_text(&s_loading, LOADING_TEXT, width, height, left, bottom, glyph_height))
 	{
 		s_failed = 1;
 		return;
 	}
-	draw_overlay(width, height);
+	draw_overlay(&s_loading, width, height);
 }
 
 /* frames per second, from the same counter the heartbeat thread reports, so
@@ -330,6 +344,7 @@ void host_fps_draw(int width, int height)
 	static u64 last_tick;
 	static int s_samples, s_draws;
 	static unsigned long s_last_reported;
+	static u64 s_slowest_ticks;
 	u64 now = armGetSystemTick();
 	float elapsed;
 	unsigned long count = g_host_swap_count;
@@ -337,8 +352,16 @@ void host_fps_draw(int width, int height)
 	char text[OVERLAY_TEXT_MAXIMUM];
 	int fps;
 
-	if (s_failed || width <= 0 || height <= 0)
+	if (!(g_host_overlay_flags & HOST_OVERLAY_ENABLED) || s_failed || width <= 0 || height <= 0)
 		return;
+	/* the slowest frame since the last sample: swap to swap */
+	{
+		static u64 previous_swap;
+
+		if (previous_swap && now - previous_swap > s_slowest_ticks)
+			s_slowest_ticks = now - previous_swap;
+		previous_swap = now;
+	}
 	elapsed = (float)armTicksToNs(now - last_tick) / 1000000000.0f;
 	/* Once a second is enough to sample: the frame rate is averaged over the
 	interval and the shader counters only climb. Everything below that guard
@@ -347,7 +370,8 @@ void host_fps_draw(int width, int height)
 	painted on every frame; only the numbers behind it are sampled. */
 	if (elapsed < 1.0f)
 	{
-		draw_overlay(width, height);
+		if (s_counter.vertex_count > 0)
+			draw_overlay(&s_counter, width, height);
 		return;
 	}
 	if (!ensure_program())
@@ -362,7 +386,17 @@ void host_fps_draw(int width, int height)
 	status, so these normally match - a gap means the driver has work
 	outstanding, which is the stall. See tools/switch_gl_resolve.py for why
 	there is no cache to hide it. */
-	snprintf(text, sizeof(text), "%d FPS  %lu/%lu", fps, g_shader_compiles_done, g_shader_compiles);
+	{
+		int length = snprintf(text, sizeof(text), "%d FPS", fps);
+
+		if (g_host_overlay_flags & HOST_OVERLAY_FRAME_TIME)
+			length += snprintf(text + length, sizeof(text) - (size_t)length, "  %d MS",
+				(int)(armTicksToNs(s_slowest_ticks) / 1000000ULL));
+		if (g_host_overlay_flags & HOST_OVERLAY_SHADERS)
+			snprintf(text + length, sizeof(text) - (size_t)length, "  %lu/%lu", g_shader_compiles_done,
+				g_shader_compiles);
+		s_slowest_ticks = 0;
+	}
 	/* The counter was reported as flashing on and off too fast to read, which
 	has two very different causes: the string churning, or the draw not
 	happening. These lines tell them apart. Only the first few, so a working
@@ -371,12 +405,12 @@ void host_fps_draw(int width, int height)
 	{
 		s_samples++;
 		logf_both("fps overlay: \"%s\" from %lu swaps over %.2fs, %d vertices\n", text,
-			count - s_last_reported, elapsed, s_vertex_count);
+			count - s_last_reported, elapsed, s_counter.vertex_count);
 		s_last_reported = count;
 	}
-	/* 10 px below the top edge */
-	if (!set_text(text, width, height, centered_left(text, width, glyph_height), (float)height - glyph_height - 10.0f,
-		glyph_height))
+	/* 10 px inside the top or bottom edge */
+	if (!set_text(&s_counter, text, width, height, centered_left(text, width, glyph_height),
+		g_host_overlay_flags & HOST_OVERLAY_BOTTOM ? 10.0f : (float)height - glyph_height - 10.0f, glyph_height))
 	{
 		s_failed = 1;
 		logf_both("fps overlay: nothing to draw for \"%s\"\n", text);
@@ -384,7 +418,7 @@ void host_fps_draw(int width, int height)
 	}
 	if (!(++s_draws % 60) && s_samples >= 12)
 		logf_both("fps overlay: %d draws, %u swap calls, \"%s\"\n", s_draws, (unsigned)count, text);
-	draw_overlay(width, height);
+	draw_overlay(&s_counter, width, height);
 }
 
 /* a blank console until the GL window takes over: the text is shown once,

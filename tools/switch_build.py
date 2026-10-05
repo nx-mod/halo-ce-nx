@@ -68,6 +68,9 @@ SWITCH_ABI_FLAGS = [
     "-ffunction-sections",
     "-fdata-sections",
     "-O2",
+    # the Switch's CPU (Tegra X1): scheduled for it rather than a generic
+    # ARMv8 core, as the host NRO already is (-mtune=cortex-a57)
+    "-mcpu=cortex-a57",
     "-g",
     *(f"-fno-builtin-{name}" for name in (
         "wcslen", "wcsnlen", "wcschr", "wcsrchr", "wcscmp", "wcsncmp", "wcscpy",
@@ -116,7 +119,14 @@ SWITCH_PLATFORM_FILES = [
     # its own mixer_lock/parameter_lock between the tick and audio
     # threads - PORTING.md's "wire in audio/controls" milestone.
     "dsound_sdl.c",
+    # the settings file, sdmc:/haloce-nx/config.toml: written commented
+    # with the defaults on first run, the player's edits kept after that.
+    # Its parser is TOML_DIR's tomlc17.c, built below.
+    "port_config.c",
 ]
+
+# the TOML parser config.toml is read with (port/linux/src/port_config.c)
+TOML_DIR = Path("port/third_party/tomlc17")
 
 # The real D3D8 device: Linux's own GLES3-over-OpenGL-4.5 renderer, whose
 # existing HALO_ANDROID branches (same GLES3.2 API, same guest/host split
@@ -295,10 +305,9 @@ def generate_switch_build(n: Writer, sln: Any) -> None:
     platform_implicit = [*xdk_headers(), prefix_header, switch_platform_semantics_header, MUSL_LIB]
     platform_cflags = " ".join([
         abi, " ".join(PLATFORM_FLAGS), f"-include {prefix_header}", f"-include {switch_platform_semantics_header}",
-        "-DDEBUG", "-Dxbox", f"-I{port_include}", f"-I{LINUX_DIR}/src", sdk_flags, musl_includes,
+        "-DDEBUG", "-Dxbox", f"-I{port_include}", f"-I{LINUX_DIR}/src", f"-I{TOML_DIR}", sdk_flags, musl_includes,
     ])
-    for name in SWITCH_PLATFORM_FILES:
-        source = LINUX_DIR / "src" / name
+    for source in [*(LINUX_DIR / "src" / name for name in SWITCH_PLATFORM_FILES), TOML_DIR / "tomlc17.c"]:
         obj = obj_dir / source.with_suffix(".o")
         objects.append(obj)
         n.build(outputs=obj, rule="switch_cc", inputs=source, implicit=platform_implicit,

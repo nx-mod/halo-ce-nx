@@ -73,6 +73,25 @@ static void GL_APIENTRY gl_debug_message(GLenum source, GLenum type, GLuint id, 
 	logf_both("GL %s (frame %lu): %s\n", type == GL_DEBUG_TYPE_ERROR ? "ERROR" : "debug", g_host_swap_count, message);
 }
 
+/* config.toml's display and overlay settings and debug.gl_debug, from the
+guest (d3d8_gl.c) just before it asks for the window */
+static int s_frame_rate = 60, s_vsync = 1, s_gl_debug;
+static u64 s_pace_ns;
+int g_host_overlay_flags = HOST_OVERLAY_ENABLED | HOST_OVERLAY_FRAME_TIME | HOST_OVERLAY_SHADERS;
+
+void host_video_configure(int frame_rate, int vsync, int overlay_flags, int gl_debug)
+{
+	s_frame_rate = frame_rate >= 0 && frame_rate <= 240 ? frame_rate : 60;
+	s_vsync = vsync != 0;
+	g_host_overlay_flags = overlay_flags;
+	s_gl_debug = gl_debug != 0;
+	logf_both("settings: frame rate %d, vsync %s, overlay %s%s%s%s, GL debug %s\n", s_frame_rate,
+		s_vsync ? "on" : "off", overlay_flags & HOST_OVERLAY_ENABLED ? "on" : "off",
+		overlay_flags & HOST_OVERLAY_BOTTOM ? " at the bottom" : "",
+		overlay_flags & HOST_OVERLAY_FRAME_TIME ? " with frame time" : "",
+		overlay_flags & HOST_OVERLAY_SHADERS ? " with shaders" : "", s_gl_debug ? "on" : "off");
+}
+
 int platform_video_initialize(unsigned long width, unsigned long height)
 {
 	static const EGLint config_attribs[] = {
@@ -140,53 +159,30 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 	/* the driver's own account of any GL call it rejects - the renderer
 	never checks glGetError, so a rejected texture format or vertex
 	attribute fails silently otherwise */
-	/* How many vsyncs to wait between presents, from the frame cap below. The
-	panel is 60 Hz, so a cap of 30 is two vsyncs and 60 is one.
-
-	Note that 30 is not the ceiling: the guest already renders interpolated
-	frames at the display's rate (source/main/main.c calls
-	render_interpolation_frame_begin/end around main_game_render, and
-	display.interpolation defaults to true), so it has something new to show
-	every 60 Hz refresh. Waiting two vsyncs threw those frames away. The
-	comment this replaced claimed interval 1 stuttered, because presenting a
-	30 Hz simulation as fast as the display allows repeats frames unevenly -
-	which is what the interpolator is there to prevent. */
-
-#define HOST_PRESENT_FPS_CAP 60
-
-/* Read from the SD card so it can be changed without a rebuild: 30, 60, or 0
-	for uncapped (no waiting at all, so the frame rate becomes whatever the
-	renderer manages). Any other positive number is taken as a vsync count,
-	which is 1 for 60 and 2 for 30 on this panel. Absent or nonsense means
-	HOST_PRESENT_FPS_CAP. */
+	/* How many vsyncs to wait between presents (config.toml's display.vsync
+	and display.frame_rate, handed over by host_video_configure). The panel
+	is 60 Hz: a cap of 30 is two vsyncs, 60 one. With vsync off nothing
+	waits for the display and platform_video_swap sleeps to the cap instead,
+	if there is one. A rate above 30 needs display.interpolation to show
+	anything new: without it the guest draws 30 whatever this says. */
 	{
-		static const char *const PRESENT_PATH = "sdmc:/haloce-nx/present.txt";
-		int cap = HOST_PRESENT_FPS_CAP;
-		int from_file = 0;
-		int interval;
-		FILE *file = fopen(PRESENT_PATH, "r");
+		int interval = !s_vsync ? 0 : s_frame_rate > 0 && s_frame_rate <= 30 ? 2 : 1;
 
-		if (file)
-		{
-			int requested = 0;
-
-			if (fscanf(file, "%d", &requested) == 1 && requested >= 0 && requested <= 240)
-			{
-				cap = requested;
-				from_file = 1;
-			}
-			else
-				logf_both("present: ignoring %s (expected 30, 60, or 0 for uncapped)\n", PRESENT_PATH);
-			fclose(file);
-		}
-		interval = cap == 0 ? 0 : cap <= 30 ? 2 : cap <= 60 ? 1 : 2;
-		logf_both("present: capped at %d fps (%d vsync(s) between frames)%s\n", cap, interval,
-			from_file ? ", from the SD card" : "");
+		s_pace_ns = !s_vsync && s_frame_rate > 0 ? 1000000000ULL / (u64)s_frame_rate : 0;
+		logf_both("present: %s, %s (%d vsync(s) between frames)\n", s_vsync ? "vsync on" : "vsync off",
+			s_frame_rate > 0 ? "capped" : "uncapped", interval);
+		if (s_frame_rate > 0)
+			logf_both("present: at most %d fps\n", s_frame_rate);
 		eglSwapInterval(s_display, interval);
 	}
-	glEnable(GL_DEBUG_OUTPUT);
-	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-	glDebugMessageCallback(gl_debug_message, NULL);
+	/* the driver's account of any GL call it rejects (debug.gl_debug): off
+	by default, since synchronous debug output slows every call */
+	if (s_gl_debug)
+	{
+		glEnable(GL_DEBUG_OUTPUT);
+		glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+		glDebugMessageCallback(gl_debug_message, NULL);
+	}
 	/* what the driver will and will not do, once, rather than inferred from
 	absent directories later */
 	{
@@ -292,6 +288,19 @@ void platform_video_swap(void)
 		platform_video_drawable_size(&w, &h);
 		host_loading_text_draw(w, h);
 		host_fps_draw(w, h);
+	}
+	/* vsync off with a cap: nothing else waits, so this does */
+	if (s_pace_ns)
+	{
+		static u64 previous;
+		u64 now = armTicksToNs(armGetSystemTick());
+
+		if (previous && now - previous < s_pace_ns)
+		{
+			svcSleepThread((s64)(s_pace_ns - (now - previous)));
+			now = armTicksToNs(armGetSystemTick());
+		}
+		previous = now;
 	}
 	if (!eglSwapBuffers(s_display, s_surface) && failure_count < 5)
 	{

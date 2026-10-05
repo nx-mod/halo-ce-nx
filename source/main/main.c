@@ -2227,7 +2227,15 @@ static boolean halo_frame_unthrottled(
 	static int unthrottled = -1;
 
 	if (unthrottled < 0)
+	{
+#ifdef HALO_SWITCH
+		/* the host paces presents (display.vsync and display.frame_rate,
+		host_video.c): the Xbox's vertical blank throttle is never used */
+		unthrottled = 1;
+#else
 		unthrottled = !config_boolean("display.vsync");
+#endif
+	}
 	return halo_interpolation_enabled() || unthrottled;
 }
 

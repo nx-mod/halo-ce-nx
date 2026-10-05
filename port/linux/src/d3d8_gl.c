@@ -1144,6 +1144,18 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 		viewport_update_constants();
 
 		{
+#ifdef HALO_SWITCH
+			/* the host's half of config.toml (port_config.c): frame pacing,
+			the overlay and GL debug output are the host's, set up as the
+			window is */
+			extern void host_video_configure(int frame_rate, int vsync, int overlay_flags, int gl_debug);
+			const char *overlay_position = config_string("overlay.position");
+
+			host_video_configure((int)config_integer("display.frame_rate"), config_boolean("display.vsync"),
+				(config_boolean("overlay.enabled") ? 1 : 0) | (!strcmp(overlay_position, "bottom") ? 2 : 0) |
+				(config_boolean("overlay.frame_time") ? 4 : 0) | (config_boolean("overlay.shaders") ? 8 : 0),
+				config_boolean("debug.gl_debug"));
+#endif
 			BOOL have_window = !config_boolean("debug.null_renderer") && platform_video_initialize(width, height);
 #ifdef HALO_SWITCH
 			/* Linux/Android share sdl_platform.c's platform_video_initialize,
