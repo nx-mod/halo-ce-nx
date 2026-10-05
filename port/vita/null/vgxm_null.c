@@ -156,8 +156,42 @@ static unsigned long long source_hash(const char *source, int fragment)
 	return hash ^ (fragment ? 1ull : 0ull);
 }
 
-volatile unsigned long long vgxm_compile_us;
-volatile unsigned long vgxm_compiles;
+volatile unsigned long long vgxm_compile_us, vgxm_shader_load_us, vgxm_link_us, vgxm_cache_write_us;
+volatile unsigned long vgxm_compiles, vgxm_shader_loads, vgxm_links, vgxm_compiles_background;
+
+/* HALO_SHADER_COLLECT=<directory>: each program's Cg written there as
+<hash>.vp.cg or <hash>.fp.cg, named by the Vita's hash of it (vita_gxm.c's
+source_hash, which the shader cache and the shipped pack are keyed by), for
+tools/vita_shader_pack.py */
+static void shader_collect(const char *source, int fragment)
+{
+	static int checked;
+	static const char *directory;
+	unsigned long long hash = 14695981039346656037ull ^ (unsigned long long)fragment;
+	const char *each;
+	char path[1024];
+	FILE *file;
+
+	if (!checked)
+	{
+		checked = 1;
+		directory = getenv("HALO_SHADER_COLLECT");
+		if (directory && !*directory)
+			directory = NULL;
+	}
+	if (!directory)
+		return;
+	for (each = source; *each; each++)
+		hash = (hash ^ (unsigned char)*each) * 1099511628211ull;
+	snprintf(path, sizeof(path), "%s/%016llx.%s.cg", directory, hash, fragment ? "fp" : "vp");
+	if (access(path, F_OK) == 0)
+		return;
+	if ((file = fopen(path, "wb")) != NULL)
+	{
+		fwrite(source, 1, strlen(source), file);
+		fclose(file);
+	}
+}
 
 unsigned long vgxm_shader_get(const char *source, int fragment)
 {
@@ -169,8 +203,14 @@ unsigned long vgxm_shader_get(const char *source, int fragment)
 			return index + 1;
 	if (null.shader_count >= MAXIMUM_SHADERS)
 		return 0;
+	shader_collect(source, fragment);
 	null.shader_hashes[null.shader_count] = hash;
 	return ++null.shader_count;
+}
+
+unsigned long vgxm_shader_request(const char *source, int fragment)
+{
+	return vgxm_shader_get(source, fragment);
 }
 
 #define ALIGN(value, alignment) (((value) + (alignment) - 1) & ~((alignment) - 1))
@@ -259,10 +299,27 @@ void vgxm_texture_set_sampler(struct vgxm_texture *texture, unsigned long min_fi
 		((unsigned long)(lod_bias * 16.0f) & 0xff) << 20;
 }
 
+void vgxm_texture_set_level_count(struct vgxm_texture *texture, unsigned long levels)
+{
+	/* (in the texture words' top bits, for the draw hash) */
+	texture->control[1] = (texture->control[1] & 0x0ffffffful) | (unsigned long)(levels & 0xf) << 28;
+}
+
 unsigned long vgxm_target_create(unsigned long width, unsigned long height, int depth, struct vgxm_texture *texture)
 {
-	if (null.target_count >= MAXIMUM_TARGETS)
+	/* (debug) HALO_TARGET_LIMIT=n, as on the Vita (vita_gxm.c) */
+	static int limit = -1;
+
+	if (limit < 0)
+	{
+		const char *setting = getenv("HALO_TARGET_LIMIT");
+
+		limit = setting && atoi(setting) > 0 && atoi(setting) < MAXIMUM_TARGETS ? atoi(setting) : MAXIMUM_TARGETS;
+	}
+	if (null.target_count >= (unsigned int)limit)
 		return 0;
+	if (getenv("HALO_TRACE_FILES"))
+		fprintf(stderr, "trace: target %lux%lu depth %d (%u made)\n", width, height, depth, null.target_count);
 	null.target_count++;
 	if (texture)
 	{
@@ -272,6 +329,21 @@ unsigned long vgxm_target_create(unsigned long width, unsigned long height, int 
 		texture->control[3] = 0;
 	}
 	return null.target_count;
+}
+
+int vgxm_target_remake(unsigned long id, unsigned long width, unsigned long height, int depth,
+	struct vgxm_texture *texture)
+{
+	if (!id || id > null.target_count || !width || !height)
+		return 0;
+	if (texture)
+	{
+		texture->control[0] = 0x80000000ul | id;
+		texture->control[1] = depth ? 0x100 : 0;
+		texture->control[2] = width | height << 16;
+		texture->control[3] = 0;
+	}
+	return 1;
 }
 
 int vgxm_target_create_chain(unsigned long width, unsigned long height, unsigned long levels,
@@ -293,6 +365,12 @@ void vgxm_set_targets(unsigned long color, unsigned long depth)
 {
 	null.color_target = color;
 	null.depth_target = depth;
+}
+
+/* (no GPU: no scene dependencies) */
+void vgxm_note_sampled_target(unsigned long id)
+{
+	(void)id;
 }
 
 /* HALO_DRAW_HASH=1: every draw and clear folded into a hash of what the GPU
@@ -682,6 +760,11 @@ unsigned long vgxm_visibility_count(int buffer, unsigned long slot)
 	(void)buffer;
 	(void)slot;
 	return 0;
+}
+
+void vgxm_wait_gpu_idle(void)
+{
+	/* (no GPU: the draws were done when they were made) */
 }
 
 void vgxm_present(unsigned long color_target, unsigned long width, unsigned long height)

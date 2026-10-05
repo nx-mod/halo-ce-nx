@@ -1212,6 +1212,17 @@ void rasterizer_set_model_lighting_distant_light(
 		lighting_constants->distant_lights[light_index].direction =
 			light->direction;
 		lighting_constants->distant_lights[light_index].color = light->color;
+#ifdef HALO_LINUX
+		/* (port) the registers' w are left as the stack had them, and the
+		block is uploaded whole (c17..c27). The translated model vertex
+		programs read whole registers (nv2a_vsh_cg.c), where an IEEE GPU
+		gives 0 * NaN = NaN: on the Vita a stack holding a NaN there turned
+		the model black - every model lit by a point light, such as the
+		flashlight's, on the frames it happened (c24.w, HALO_LIGHT_CHECK).
+		The Xbox's stack held something harmless. */
+		lighting_constants->distant_lights[light_index].pad0C = 0.0f;
+		lighting_constants->distant_lights[light_index].pad1C = 0.0f;
+#endif
 	}
 	else
 	{
@@ -1264,6 +1275,10 @@ void rasterizer_set_model_lighting(
 				light_index,
 				&lighting_constants);
 		lighting_constants.ambient_color = lighting->ambient_color;
+#ifdef HALO_LINUX
+		/* (port) as the distant lights' w (rasterizer_set_model_lighting_distant_light) */
+		lighting_constants.pad = 0.0f;
+#endif
 	}
 	D3DDevice_SetVertexShaderConstant(
 		-79,
@@ -1995,12 +2010,43 @@ static boolean rasterizer_texture_streaming(
 /* a bitmap's hardware texture when streaming: its own if it is in, else
 the stand-in's (and the read is under way); NULL to wait for it as the
 game did */
+/* the headers the stand-ins are bound by (port/linux/src/d3d8_resources.c):
+copies of the default textures' own, so the device can tell a bitmap that
+is still loading from a shader's use of the default texture itself, and
+leave out the blended draws that sample one (port/vita/platform/d3d8_gxm.c) */
+extern D3DBaseTexture d3d_stand_in_textures[];
+extern const unsigned long d3d_stand_in_texture_count;
+
+static D3DBaseTexture *rasterizer_stand_in_header(
+	D3DBaseTexture *texture)
+{
+	static D3DBaseTexture *originals[8];
+	unsigned long index;
+
+	if (!texture)
+		return NULL;
+	for (index = 0; index < d3d_stand_in_texture_count && index < NUMBEROF(originals); index++)
+	{
+		if (!originals[index] || originals[index] == texture)
+		{
+			originals[index] = texture;
+			/* (copied at each use: the default texture's header is the
+			texture cache's, rewritten if its block is evicted and read
+			again) */
+			d3d_stand_in_textures[index] = *texture;
+			return &d3d_stand_in_textures[index];
+		}
+	}
+	return texture;
+}
+
 static D3DBaseTexture *rasterizer_texture_streamed(
 	struct bitmap_data const *bitmap,
 	boolean *stand_in_used)
 {
 	long default_definition_index;
 	struct bitmap_data *stand_in;
+	struct bitmap_group *group;
 	D3DBaseTexture *texture;
 
 	if (!TEST_FLAG(bitmap->flags, 7 /* _bitmap_cached_bit, the private enum of bitmaps.c */) ||
@@ -2011,12 +2057,34 @@ static D3DBaseTexture *rasterizer_texture_streamed(
 	}
 	/* (the read starts here if it has not) */
 	texture = _texture_cache_bitmap_get_hardware_format((struct bitmap_data *)bitmap, FALSE, TRUE);
+	{
+		/* (debug) HALO_STAND_IN_TEST=<text>: the bitmaps whose tag names
+		have it in them are drawn as if they never finished loading, to see
+		their stand-ins (the memory card is slower than Vita3K's disk) */
+		static const char *test = (const char *)-1;
+
+		if (test == (const char *)-1)
+		{
+			test = getenv("HALO_STAND_IN_TEST");
+			if (test && !*test)
+				test = NULL;
+		}
+		if (test && strstr(tag_get_name(bitmap->tag_index), test))
+			texture = NULL;
+	}
 	if (texture)
 		return texture;
+	group = bitmap_group_get(bitmap->tag_index);
+	/* The interface's bitmaps (the HUD, the menus, the help screens) and
+	sprites are waited for, as the game did: they are small, and a stand-in
+	drew them as solid white - the first time the help screen opened, the
+	whole screen flashed white. */
+	if (group->type == 3 /* sprites */ || group->type == 4 /* interface bitmaps */)
+		return NULL;
 	default_definition_index = global_rasterizer_data->default_textures[bitmap->type].index;
 	if (default_definition_index == NONE || default_definition_index == bitmap->tag_index)
 		return NULL;
-	stand_in = bitmap_group_try_and_get_bitmap(default_definition_index, bitmap_group_get(bitmap->tag_index)->usage);
+	stand_in = bitmap_group_try_and_get_bitmap(default_definition_index, group->usage);
 	if (!stand_in || stand_in->type != bitmap->type)
 		return NULL;
 	{
@@ -2025,9 +2093,13 @@ static D3DBaseTexture *rasterizer_texture_streamed(
 		if (stand_ins++ < 4)
 			platform_log("texture streaming: %s drawn with a stand-in while it loads", tag_get_name(bitmap->tag_index));
 	}
-	/* (the default textures are small: waited for, the first time) */
+	/* (the default textures are small: waited for, the first time). The
+	stand-in is opaque white or grey: right for the opaque passes, but a
+	blended draw (the assault rifle's compass, decals, effects) showed it as
+	a white block. It is bound by a header of its own, by which the device
+	leaves the blended draws out until the bitmap is in. */
 	*stand_in_used = TRUE;
-	return _texture_cache_bitmap_get_hardware_format(stand_in, TRUE, TRUE);
+	return rasterizer_stand_in_header(_texture_cache_bitmap_get_hardware_format(stand_in, TRUE, TRUE));
 }
 #endif
 

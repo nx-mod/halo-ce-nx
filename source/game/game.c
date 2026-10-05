@@ -434,7 +434,7 @@ void game_initialize(
 /* HALO_TICK_PROFILE=1: where the tick's time goes, every 300 ticks */
 #include <stdlib.h>
 static int tick_profile_enabled = -1;
-static unsigned long long tick_phase_started, tick_phase_us[16];
+static unsigned long long tick_phase_started, tick_phase_us[16], tick_phase_this_tick_us[16];
 static const char *tick_phase_name[16];
 static unsigned long tick_profile_ticks;
 unsigned long long vita_host_time_us(void);
@@ -445,12 +445,30 @@ static void tick_phase_end(int phase, const char *name)
 {
 	if (tick_profile_enabled < 0) { const char *e = getenv("HALO_TICK_PROFILE"); tick_profile_enabled = e && atoi(e) != 0; }
 	if (tick_profile_enabled <= 0) return;
-	tick_phase_us[phase] += tick_now() - tick_phase_started; tick_phase_name[phase] = name;
+	{
+		unsigned long long elapsed = tick_now() - tick_phase_started;
+
+		tick_phase_us[phase] += elapsed; tick_phase_name[phase] = name;
+		tick_phase_this_tick_us[phase] += elapsed;
+	}
 }
 static void tick_phase_report(void)
 {
 	char line[512]; int n = 0, i;
-	if (tick_profile_enabled <= 0 || ++tick_profile_ticks % 300) return;
+	unsigned long long this_tick = 0;
+	if (tick_profile_enabled <= 0) return;
+	/* a tick of over 100 ms (a hitch the frame timing's averages hide) is
+	logged with its own phases */
+	for (i = 0; i < 16; i++) this_tick += tick_phase_this_tick_us[i];
+	if (this_tick > 100000)
+	{
+		for (i = 0; i < 16; i++) { if (!tick_phase_name[i] || tick_phase_this_tick_us[i] < 1000) continue;
+			n += snprintf(line + n, sizeof(line) - n, " %s %.1f", tick_phase_name[i], tick_phase_this_tick_us[i] / 1000.0); }
+		platform_log("tick-hitch: tick %ld took %.1f ms:%s", (long)game_time_get(), this_tick / 1000.0, line);
+		n = 0;
+	}
+	for (i = 0; i < 16; i++) tick_phase_this_tick_us[i] = 0;
+	if (++tick_profile_ticks % 300) return;
 	for (i = 0; i < 16; i++) { if (!tick_phase_name[i]) continue;
 		n += snprintf(line + n, sizeof(line) - n, " %s %.2f", tick_phase_name[i], tick_phase_us[i] / 1000.0 / 300.0); tick_phase_us[i] = 0; }
 	platform_log("tick-profile (ms/tick):%s", line);
@@ -751,6 +769,127 @@ boolean game_safe_to_save(
 
 	return safe;
 }
+
+#ifdef HALO_LINUX
+/* (port) Why game_safe_to_save says no, for the log (main.c, a checkpoint
+that waits): the first test that fails, in game_safe_to_save's order, and
+for the tests that look at objects the object found. Two of them look at
+the whole map, not only around the player: any_unit_is_dangerous (a unit
+throwing a grenade or dying, anywhere) and dangerous_projectiles_near_
+player (any projectile at all) - one that never goes away holds every
+checkpoint off, and a checkpoint that holds it carries it into the
+campaign save. NULL when it is safe. Nothing but the log reads it. */
+char *tag_get_name(long tag_index);
+
+static void game_unsafe_to_save_object(
+	char *buffer,
+	long size,
+	char const *test,
+	long object_index,
+	long count)
+{
+	struct object_header_datum *header = object_header_get(object_index);
+	struct object_datum *object = object_get(object_index);
+	struct data_iterator iterator;
+	struct player_datum *player;
+	real distance = -1.0f;
+
+	data_iterator_new(&iterator, player_data);
+	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+	{
+		if (player->unit_index != NONE)
+		{
+			distance = square_root(distance_squared3d(&object_get(player->unit_index)->object.bounding_sphere_center,
+				&object->object.bounding_sphere_center));
+			break;
+		}
+	}
+	snprintf(buffer, size, "%s: %s (%s%s), %.1f m from the player, at %.1f %.1f %.1f; %ld such in the map",
+		test, tag_get_name(object->definition_index),
+		TEST_FLAG(header->flags, _object_header_active_bit) ? "active" : "not active",
+		TEST_FLAG(header->flags, _object_header_do_not_update_bit) ? ", not updated" : "",
+		distance, object->object.bounding_sphere_center.x, object->object.bounding_sphere_center.y,
+		object->object.bounding_sphere_center.z, count);
+}
+
+char const *game_unsafe_to_save_reason(
+	char *buffer,
+	long size)
+{
+	struct object_iterator iterator;
+	long object_index = NONE;
+	long count = 0;
+
+	if (ai_enemies_can_see_player())
+		return "ai_enemies_can_see_player";
+	if (dangerous_projectiles_near_player())
+	{
+		object_iterator_new(&iterator, _object_mask_projectile, 0);
+		while (object_iterator_next(&iterator))
+		{
+			if (object_index == NONE)
+				object_index = iterator.index;
+			count++;
+		}
+		if (object_index == NONE)
+			return "dangerous_projectiles_near_player";
+		game_unsafe_to_save_object(buffer, size, "dangerous_projectiles_near_player", object_index, count);
+		return buffer;
+	}
+	if (dangerous_items_near_player())
+	{
+		struct item_datum *item;
+
+		object_iterator_new(&iterator, _object_mask_item, 1);
+		while ((item = (struct item_datum *)object_iterator_next(&iterator)) != NULL)
+		{
+			if (item->item.detonation_ticks > 0)
+			{
+				if (object_index == NONE)
+					object_index = iterator.index;
+				count++;
+			}
+		}
+		if (object_index == NONE)
+			return "dangerous_items_near_player";
+		game_unsafe_to_save_object(buffer, size, "dangerous_items_near_player", object_index, count);
+		return buffer;
+	}
+	if (dangerous_effects_near_player())
+		return "dangerous_effects_near_player";
+	if (any_unit_is_dangerous())
+	{
+		struct unit_datum *unit;
+
+		object_iterator_new(&iterator, _object_mask_unit, 1);
+		while ((unit = (struct unit_datum *)object_iterator_next(&iterator)) != NULL)
+		{
+			if ((unit->unit.animation.state==_unit_state_throw_grenade && unit->unit.grenade_throw_state!=_unit_grenade_throw_ending) ||
+				((unit->unit.animation.state==_unit_state_dying || unit->unit.animation.state==_unit_state_dying_airborne) &&
+				!TEST_FLAG(unit->unit.animation.flags, _unit_animation_ignore_translation_bit)))
+			{
+				if (object_index == NONE)
+					object_index = iterator.index;
+				count++;
+			}
+		}
+		if (object_index == NONE)
+			return "any_unit_is_dangerous";
+		game_unsafe_to_save_object(buffer, size,
+			unit_get(object_index)->unit.animation.state == _unit_state_throw_grenade ?
+				"any_unit_is_dangerous (throwing a grenade)" : "any_unit_is_dangerous (dying)",
+			object_index, count);
+		return buffer;
+	}
+	if (any_player_is_in_the_air())
+		return "any_player_is_in_the_air";
+	if (any_player_is_dead())
+		return "any_player_is_dead";
+	if (vehicle_moving_near_any_player())
+		return "vehicle_moving_near_any_player";
+	return NULL;
+}
+#endif
 
 boolean game_safe_to_speak(
 	void)

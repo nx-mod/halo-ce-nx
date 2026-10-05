@@ -24,6 +24,10 @@ struct render_camera;
 struct real_matrix4x3;
 int halo_interpolation_enabled(void);
 float game_time_get_tick_fraction(void);
+/* the fraction for the state the render draws (the finished update's, with the tick on its thread) */
+float halo_render_tick_fraction_get(void);
+/* the first-person weapon blended between ticks without the rest (HALO_INTERPOLATE_FIRST_PERSON) */
+int halo_first_person_interpolation_enabled(void);
 void render_interpolation_tick(void);
 void render_interpolation_frame_begin(void);
 void render_interpolation_frame_end(void);
@@ -37,10 +41,13 @@ unsigned char render_tick_pose_bounding_sphere(long object_index, union real_poi
 /* ... and the clusters' object lists as that tick left them, which the
 render walks instead of the running tick's (render_interpolation.c, "the
 threaded tick's cluster lists") */
-enum { _tick_cluster_list_collideable, _tick_cluster_list_noncollideable, _tick_cluster_list_count };
+enum { _tick_cluster_list_collideable, _tick_cluster_list_noncollideable, _tick_cluster_list_light, _tick_cluster_list_count };
 unsigned char render_tick_cluster_lists_active(int which);
 long render_tick_cluster_list_first(int which, long *iterator, short cluster_index);
 long render_tick_cluster_list_next(int which, long *iterator);
+/* the clusters an object (its ultimate parent) was in when that tick was
+captured; 0 when the frame walks the live lists or the object is not there */
+unsigned char render_tick_object_clusters(long object_index, short const **clusters, short *count);
 struct observer_result const *render_interpolation_camera(short local_player_index,
 	struct observer_result const *observer);
 void render_interpolation_first_person(short local_player_index, struct real_matrix4x3 *node_matrices,
@@ -54,6 +61,10 @@ long halo_screen_width(void);
 long halo_screen_commit(void);
 /* while TRUE, drawing shifts right to center 640-column layouts */
 void halo_screen_ui_offset(unsigned char centered);
+/* the open movie's display shape (width / height) when its file gives one
+apart from its size in pixels, 0 otherwise (port/vita/platform/bink_vita.c;
+port/linux/src/bink_null.c: 0) */
+float halo_movie_display_aspect(void);
 /* the mouse in the menus (source/interface/ui_widget.c) */
 #include "halo_ui_pointer.h"
 

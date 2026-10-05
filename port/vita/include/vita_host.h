@@ -25,6 +25,9 @@ unsigned long vita_host_thread_id(void);
 
 /* a thread of its own on the given core (0-2); 0 on success */
 int vita_host_thread_start(const char *name, void (*function)(void *), void *argument, int core);
+/* the same at a priority (64..191, lower runs first); core -1: any core */
+int vita_host_thread_start_priority(const char *name, void (*function)(void *), void *argument, int core,
+	int priority);
 
 /* each core's busy share of the last second, 0-100, or 255 unknown */
 void vita_host_cpu_usage(unsigned char busy[3]);
@@ -45,6 +48,18 @@ int vita_movie_poll(void);
 /* the waiting frame as rows of X8R8G8B8 */
 void vita_movie_copy(void *destination, long pitch, unsigned long width, unsigned long height);
 void vita_movie_close(void);
+/* the open movie's display shape (width / height), which an MP4 may give
+apart from its size in pixels; 0 with no movie open */
+float vita_movie_display_aspect(void);
+/* the shape an MP4 file's video track is to be shown at
+(vita_movie_aspect.c): its track header's display size, else its pixels'
+aspect, else width / height; *source names which */
+float vita_movie_file_aspect(const char *path, unsigned long width, unsigned long height, const char **source);
+/* the shape a movie is shown at, from vita_movie_file_aspect's answer and
+the player's aspect ratio (0: none): the file's, when it gives one; the
+player's only when the file gives nothing but its size */
+float vita_movie_choose_aspect(float file_aspect, const char **source, unsigned long width, unsigned long height,
+	float player_aspect);
 
 /* ---------- the controls (port/vita/host/vita_input.c) */
 

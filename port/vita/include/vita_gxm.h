@@ -28,6 +28,13 @@ int vgxm_initialize(void *arena, unsigned long arena_size);
 card when it was compiled before); 0 when it does not compile. The id is
 also the key programs are linked by. */
 unsigned long vgxm_shader_get(const char *source, int fragment);
+/* the same without waiting for a compile (HALO_SHADER_ASYNC, on unless
+it is 0): a program neither shipped in the VPK nor in the memory card's
+cache is compiled on a thread of its own, and VGXM_SHADER_PENDING is
+returned until it is ready (the render worker's draws skip it meanwhile,
+and ask again) */
+#define VGXM_SHADER_PENDING (~0UL)
+unsigned long vgxm_shader_request(const char *source, int fragment);
 
 /* ---------- memory */
 
@@ -74,6 +81,10 @@ int vgxm_texture_initialize(struct vgxm_texture *texture, const void *data, unsi
 /* Direct3D sampler state (D3DTEXF_*, D3DTADDRESS_*) applied to a copy */
 void vgxm_texture_set_sampler(struct vgxm_texture *texture, unsigned long min_filter, unsigned long mag_filter,
 	unsigned long mip_filter, unsigned long address_u, unsigned long address_v, float lod_bias);
+/* a copy samples only its first levels (fewer than it has; GXM's mip filter
+off still picks among all of them, the nearest, where Direct3D's
+D3DTEXF_NONE reads the first level only) */
+void vgxm_texture_set_level_count(struct vgxm_texture *texture, unsigned long levels);
 
 /* ---------- render targets */
 
@@ -81,6 +92,11 @@ void vgxm_texture_set_sampler(struct vgxm_texture *texture, unsigned long min_fi
 returns its id, 0 on failure. A colour target can be sampled through the
 texture it fills in. */
 unsigned long vgxm_target_create(unsigned long width, unsigned long height, int depth,
+	struct vgxm_texture *texture);
+/* makes target id again at another size or kind (its memory given back
+first, then allocated anew), for a target nothing uses any more; its
+texture is filled in again. 1 on success; on failure the id has no target */
+int vgxm_target_remake(unsigned long id, unsigned long width, unsigned long height, int depth,
 	struct vgxm_texture *texture);
 /* colour targets for each level of one linear mip chain (levels one after
 another, rows aligned to 8 texels, as the texture cache's own mipmapped
@@ -91,6 +107,9 @@ int vgxm_target_create_chain(unsigned long width, unsigned long height, unsigned
 	unsigned long *ids, struct vgxm_texture *texture);
 /* where subsequent draws and clears go; either may be 0 */
 void vgxm_set_targets(unsigned long color, unsigned long depth);
+/* the next draw samples this target: its scene waits for the scene that
+drew it if there was no wait since (HALO_GXM_RTT_SYNC) */
+void vgxm_note_sampled_target(unsigned long id);
 
 /* ---------- drawing */
 
@@ -201,6 +220,9 @@ unsigned long vgxm_visibility_count(int buffer, unsigned long slot);
 /* ends the frame's scenes, shows the colour target (the game's back
 buffer, width x height of it) on the display and starts the next frame */
 void vgxm_present(unsigned long color_target, unsigned long width, unsigned long height);
+/* waits until the GPU has finished every frame presented so far (any
+thread; the frames' scenes all end with the present's notification) */
+void vgxm_wait_gpu_idle(void);
 
 /* a line of the renderer's cache sizes (shaders, linked programs,
 targets, scenes this frame) for the frame statistics */

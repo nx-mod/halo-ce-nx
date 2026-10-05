@@ -29,6 +29,9 @@ symbols in this file:
 #include "tag_files/tag_groups.h"
 #include "units/unit_definitions.h"
 #include "units/units.h"
+#ifdef HALO_LINUX
+#include "render_epoch.h"
+#endif
 
 /* ---------- constants */
 
@@ -71,6 +74,22 @@ struct profile_section render_particles_section =
 	NONE,
 	TRUE,
 };
+
+#ifdef HALO_LINUX
+/* (port) HALO_RENDER_PROFILE=1: where render_particles' time goes, every
+300 frames - the pool walk and visibility test, the sort, the sprites built
+(build_sprite) and their draws (build_sprites_end) - and how many */
+#include <stdlib.h>
+#include <string.h>
+unsigned long long vita_host_time_us(void);
+void platform_log(const char *format, ...);
+static int particles_profile_enabled = -1;
+static unsigned long long particles_profile_us[4];
+static unsigned long particles_profile_counts[4], particles_profile_frames;
+#define PARTICLES_PROFILE_NOW() (particles_profile_enabled > 0 ? vita_host_time_us() : 0)
+#define PARTICLES_PROFILE_ADD(index, since) do { if (particles_profile_enabled > 0) \
+	particles_profile_us[index] += vita_host_time_us() - (since); } while (0)
+#endif
 
 /* ---------- public code */
 
@@ -141,6 +160,16 @@ void render_particles(
 	real_point3d position;
 	real_vector3d direction;
 
+#ifdef HALO_LINUX
+	unsigned long long profile_from;
+
+	if (particles_profile_enabled < 0)
+	{
+		const char *setting = getenv("HALO_RENDER_PROFILE");
+		particles_profile_enabled = setting ? atoi(setting) : 0;
+	}
+	profile_from = PARTICLES_PROFILE_NOW();
+#endif
 	rendered_particle_count = 0;
 	profile_enter(render_particles_section);
 
@@ -189,6 +218,11 @@ void render_particles(
 			}
 		}
 
+#ifdef HALO_LINUX
+		PARTICLES_PROFILE_ADD(0, profile_from);
+		particles_profile_counts[0] += (unsigned long)rendered_particle_count;
+		profile_from = PARTICLES_PROFILE_NOW();
+#endif
 		if (rendered_particle_count > 0)
 		{
 			short group_count = 0;
@@ -243,6 +277,10 @@ void render_particles(
 					rendered_particle++;
 				}
 			}
+#ifdef HALO_LINUX
+			PARTICLES_PROFILE_ADD(1, profile_from);
+			particles_profile_counts[1] += (unsigned long)group_count;
+#endif
 
 			{
 				struct rendered_particle_datum *rendered_particle =
@@ -257,6 +295,9 @@ void render_particles(
 					short particle_count = group_particle_counts[group_index];
 					real total_radius = 0.0f;
 					short built_particle_count = 0;
+#ifdef HALO_LINUX
+					unsigned long long group_from = PARTICLES_PROFILE_NOW();
+#endif
 
 					build_sprites_begin(
 						&sprite_data,
@@ -282,10 +323,25 @@ void render_particles(
 								particle->flags,
 								_particle_datum_attached_to_local_player_bit))
 							{
+#ifdef HALO_LINUX
+								node_matrix =
+									first_person_weapon_try_get_node_matrix(
+										particle->local_player_index,
+										particle->node_index);
+								if (!node_matrix)
+								{
+									/* (port) the first-person weapon is gone
+									mid-tick (first_person_weapons.c); the tick
+									deletes the particle */
+									rendered_particle++;
+									continue;
+								}
+#else
 								node_matrix =
 									first_person_weapon_get_node_matrix(
 										particle->local_player_index,
 										particle->node_index);
+#endif
 							}
 							else if (object_try_and_get(particle->object_index))
 							{
@@ -295,6 +351,15 @@ void render_particles(
 							}
 							else
 							{
+#ifdef HALO_LINUX
+								/* (port) not while a tick runs: the delete takes
+								the slot back into the free list the tick's
+								particle_new allocates from (logged "delete of
+								particle on the render thread while a tick runs",
+								#20); the tick's particles_update deletes a
+								particle whose object is gone */
+								if (!halo_epoch_active)
+#endif
 								particle_delete(rendered_particle->particle_index);
 								rendered_particle++;
 								continue;
@@ -407,13 +472,34 @@ void render_particles(
 					((struct shader_effect_definition *)sprite_data.shader)->
 						secondary_map_radius =
 						total_radius / built_particle_count;
+#ifdef HALO_LINUX
+					PARTICLES_PROFILE_ADD(2, group_from);
+					particles_profile_counts[2] += (unsigned long)built_particle_count;
+					group_from = PARTICLES_PROFILE_NOW();
+#endif
 					build_sprites_end(&sprite_data);
+#ifdef HALO_LINUX
+					PARTICLES_PROFILE_ADD(3, group_from);
+					particles_profile_counts[3] += (unsigned long)sprite_data.sprite_count;
+#endif
 				}
 			}
 		}
 	}
 
 	profile_exit(render_particles_section);
+#ifdef HALO_LINUX
+	if (particles_profile_enabled > 0 && ++particles_profile_frames % 300 == 0)
+	{
+		platform_log("particles-profile (ms/frame): walk %.2f sort %.2f build %.2f draw %.2f; per frame %.0f visible, "
+			"%.1f groups, %.0f built, %.0f sprites drawn",
+			particles_profile_us[0] / 300000.0, particles_profile_us[1] / 300000.0, particles_profile_us[2] / 300000.0,
+			particles_profile_us[3] / 300000.0, particles_profile_counts[0] / 300.0, particles_profile_counts[1] / 300.0,
+			particles_profile_counts[2] / 300.0, particles_profile_counts[3] / 300.0);
+		memset(particles_profile_us, 0, sizeof(particles_profile_us));
+		memset(particles_profile_counts, 0, sizeof(particles_profile_counts));
+	}
+#endif
 	return;
 }
 

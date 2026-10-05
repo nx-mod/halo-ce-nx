@@ -48,6 +48,14 @@ void halo_epoch_discard(void);
 
 /* is the calling thread the tick thread? */
 int halo_epoch_on_mutator(void);
+/* the same, inline (data.h's lookups) */
+extern unsigned long halo_mutator_stack_low, halo_mutator_stack_high;
+__inline int halo_epoch_on_mutator_inline(void)
+{
+	unsigned long here = (unsigned long)(__SIZE_TYPE__)__builtin_frame_address(0);
+
+	return here >= halo_mutator_stack_low && here < halo_mutator_stack_high;
+}
 /* changes with every game state / map replacement (halo_epoch_discard) */
 extern unsigned long halo_map_generation;
 /* a small number naming the calling thread, by its stack (no system call
@@ -115,7 +123,9 @@ int halo_epoch_pool_free(struct memory_pool *pool, void *block);
 
 /* lruv_cache.c: the one recursive lock over the caches the tick and the
 render share (the LRUV caches, the texture cache) */
-void halo_cache_lock_acquire(void);
+/* (the site and caller are named in the report of a long wait) */
+void halo_cache_lock_acquire_at(const char *site, void *caller);
+#define halo_cache_lock_acquire() halo_cache_lock_acquire_at(__func__, __builtin_return_address(0))
 void halo_cache_lock_release(void);
 /* around a wait for the IO thread: lets the lock go if held, and takes it back */
 int halo_cache_lock_suspend(void);

@@ -51,9 +51,27 @@ up and timed out: the player could not move and the host went down */
 /* the library's socket identifiers are 0 to SCE_NET_ID_SOCKET_MAX (1023) */
 #define SOCKET_IDENTIFIERS 1024
 
-/* sockets listening for connections: their readiness (a connection to
-accept) cannot be peeked (posix_socket_select) */
-static volatile unsigned char socket_listening[SOCKET_IDENTIFIERS];
+/* each socket's: listening for connections, whose readiness (a connection
+to accept) cannot be peeked, and non-blocking (posix_socket_select) */
+enum
+{
+	SOCKET_LISTENING = 1,
+	SOCKET_NONBLOCKING = 2,
+};
+static volatile unsigned char socket_flags[SOCKET_IDENTIFIERS];
+
+/* connections a zero-timeout poll accepted from a non-blocking listening
+socket (posix_socket_select), which that socket's next accept hands out */
+#define ACCEPTED_AHEAD_MAXIMUM 8
+static struct
+{
+	int listener; /* -1: a free entry */
+	int socket;
+	SceNetSockaddrIn address;
+} accepted_ahead[ACCEPTED_AHEAD_MAXIMUM] = {
+	{ -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 }, { -1 },
+};
+static pthread_mutex_t accepted_ahead_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static __thread int last_error;
 static int net_state; /* 0 not tried, 1 up, -1 failed */
@@ -229,6 +247,31 @@ static struct
 	unsigned int peeked;
 	unsigned long long epoll_us, peek_us;
 } trace_selects;
+/* (HALO_NET_TRACE) the time the library's calls take, by kind: whether
+each call is a slow one, beside how many there are */
+enum { TRACE_OP_RECV, TRACE_OP_RECVFROM, TRACE_OP_SEND, TRACE_OP_SENDTO, TRACE_OP_PEERNAME, TRACE_OP_COUNT };
+static const char *const trace_op_names[TRACE_OP_COUNT] = { "recv", "recvfrom", "send", "sendto", "getpeername" };
+static struct
+{
+	unsigned int calls;
+	unsigned long long us;
+} trace_ops[TRACE_OP_COUNT];
+
+static int trace_on(void);
+
+static unsigned long long trace_op_begin(void)
+{
+	return trace_on() ? vita_host_time_us() : 0;
+}
+
+static void trace_op_end(int op, unsigned long long started)
+{
+	if (!started)
+		return;
+	__atomic_fetch_add(&trace_ops[op].calls, 1, __ATOMIC_RELAXED);
+	__atomic_fetch_add(&trace_ops[op].us, vita_host_time_us() - started, __ATOMIC_RELAXED);
+}
+
 /* the network control service asked for this machine's address
 (posix_local_ipv4_address), and its time */
 static struct
@@ -455,6 +498,15 @@ static void trace_report_if_due(void)
 		statistics.packet_count, (unsigned int)statistics_result);
 	trace_log("local address: the network control service asked %u times (%llu us)",
 		trace_local_address.queries, trace_local_address.query_us);
+	{
+		char line[256];
+		int n = 0, op;
+
+		for (op = 0; op < TRACE_OP_COUNT; op++)
+			n += snprintf(line + n, sizeof(line) - n, " %s %u (%llu us)", trace_op_names[op], trace_ops[op].calls,
+				trace_ops[op].us);
+		trace_log("library calls:%s", line);
+	}
 	pthread_mutex_unlock(&trace_mutex);
 }
 
@@ -562,6 +614,8 @@ int posix_socket(int family, int type, int protocol)
 		int result = sceNetSocket("halo", family, type, protocol);
 
 		forget_peer(result);
+		if (result >= 0 && result < SOCKET_IDENTIFIERS)
+			socket_flags[result] = 0;
 		if (trace_on())
 		{
 			if (result >= 0)
@@ -579,7 +633,23 @@ int posix_socket_close(int socket)
 
 	forget_peer(socket);
 	if (socket >= 0 && socket < SOCKET_IDENTIFIERS)
-		socket_listening[socket] = 0;
+	{
+		if (socket_flags[socket] & SOCKET_LISTENING)
+		{
+			int entry;
+
+			/* (a connection accepted ahead that nobody took: closed with it) */
+			pthread_mutex_lock(&accepted_ahead_mutex);
+			for (entry = 0; entry < ACCEPTED_AHEAD_MAXIMUM; entry++)
+				if (accepted_ahead[entry].listener == socket)
+				{
+					sceNetSocketClose(accepted_ahead[entry].socket);
+					accepted_ahead[entry].listener = -1;
+				}
+			pthread_mutex_unlock(&accepted_ahead_mutex);
+		}
+		socket_flags[socket] = 0;
+	}
 	result = sceNetSocketClose(socket);
 	if (trace_on())
 		trace_closed(socket, result);
@@ -634,17 +704,96 @@ int posix_socket_listen(int socket, int backlog)
 	int result = sceNetListen(socket, backlog);
 
 	if (result >= 0 && socket >= 0 && socket < SOCKET_IDENTIFIERS)
-		socket_listening[socket] = 1;
+		socket_flags[socket] |= SOCKET_LISTENING;
 	if (trace_on())
 		trace_result(socket, "listen", result, NULL);
 	return answer(result);
+}
+
+/* the listening socket's connection a poll accepted ahead: taken (it is
+the caller's then), or -1 */
+static int take_accepted_ahead(int listener, SceNetSockaddrIn *address)
+{
+	int entry, result = -1;
+
+	pthread_mutex_lock(&accepted_ahead_mutex);
+	for (entry = 0; entry < ACCEPTED_AHEAD_MAXIMUM; entry++)
+		if (accepted_ahead[entry].listener == listener)
+		{
+			result = accepted_ahead[entry].socket;
+			if (address)
+				*address = accepted_ahead[entry].address;
+			accepted_ahead[entry].listener = -1;
+			break;
+		}
+	pthread_mutex_unlock(&accepted_ahead_mutex);
+	return result;
+}
+
+/* whether a non-blocking listening socket has a connection to accept,
+without an epoll: one accepted ahead, or one accepted now and kept for
+its next accept (an error other than would-block is ready too: the
+game's accept then reports it) */
+static int listener_ready(int listener)
+{
+	int entry, free_entry = -1, result;
+	SceNetSockaddrIn address;
+	unsigned int length = sizeof(address);
+
+	pthread_mutex_lock(&accepted_ahead_mutex);
+	for (entry = 0; entry < ACCEPTED_AHEAD_MAXIMUM; entry++)
+	{
+		if (accepted_ahead[entry].listener == listener)
+		{
+			pthread_mutex_unlock(&accepted_ahead_mutex);
+			return 1;
+		}
+		if (accepted_ahead[entry].listener < 0 && free_entry < 0)
+			free_entry = entry;
+	}
+	if (free_entry < 0)
+	{
+		pthread_mutex_unlock(&accepted_ahead_mutex);
+		return 0;
+	}
+	memset(&address, 0, sizeof(address));
+	result = sceNetAccept(listener, (SceNetSockaddr *)&address, &length);
+	if (result >= 0)
+	{
+		accepted_ahead[free_entry].listener = listener;
+		accepted_ahead[free_entry].socket = result;
+		accepted_ahead[free_entry].address = address;
+	}
+	pthread_mutex_unlock(&accepted_ahead_mutex);
+	return result >= 0 || winsock_error(result) != WSAEWOULDBLOCK;
+}
+
+/* whether a listening socket has a connection accepted ahead */
+static int listener_has_accepted_ahead(int listener)
+{
+	int entry, found = 0;
+
+	pthread_mutex_lock(&accepted_ahead_mutex);
+	for (entry = 0; entry < ACCEPTED_AHEAD_MAXIMUM; entry++)
+		if (accepted_ahead[entry].listener == listener)
+			found = 1;
+	pthread_mutex_unlock(&accepted_ahead_mutex);
+	return found;
 }
 
 int posix_socket_accept(int socket, void *address, int *address_length)
 {
 	SceNetSockaddrIn vita_address;
 	unsigned int length = sizeof(vita_address);
-	int result = sceNetAccept(socket, (SceNetSockaddr *)&vita_address, &length);
+	int result = take_accepted_ahead(socket, &vita_address);
+
+	if (result < 0)
+		result = sceNetAccept(socket, (SceNetSockaddr *)&vita_address, &length);
+	else if (result < SOCKET_IDENTIFIERS)
+	{
+		forget_peer(result);
+		socket_flags[result] = 0;
+	}
 
 	if (result >= 0)
 		address_from_vita(&vita_address, address, address_length);
@@ -668,8 +817,10 @@ int posix_socket_accept(int socket, void *address, int *address_length)
 
 int posix_socket_send(int socket, const void *buffer, int length, int flags)
 {
+	unsigned long long started = trace_op_begin();
 	int result = sceNetSend(socket, buffer, (unsigned int)length, flags);
 
+	trace_op_end(TRACE_OP_SEND, started);
 	if (trace_on())
 		trace_transfer(socket, TRACE_SEND, "send", result, NULL, 0);
 	return answer(result);
@@ -724,13 +875,21 @@ int posix_socket_sendto(int socket, const void *buffer, int length, int flags,
 
 	if (vita_length && is_connected_peer(socket, &vita_address, 0))
 	{
+		unsigned long long started = trace_op_begin();
+
 		result = sceNetSend(socket, buffer, (unsigned int)length, flags);
+		trace_op_end(TRACE_OP_SEND, started);
 		if (trace_on())
 			trace_transfer(socket, TRACE_SEND, "sendto", result, &vita_address, 1);
 		return answer(result);
 	}
-	result = sceNetSendto(socket, buffer, (unsigned int)length, flags,
-		vita_length ? (const SceNetSockaddr *)&vita_address : NULL, vita_length);
+	{
+		unsigned long long started = trace_op_begin();
+
+		result = sceNetSendto(socket, buffer, (unsigned int)length, flags,
+			vita_length ? (const SceNetSockaddr *)&vita_address : NULL, vita_length);
+		trace_op_end(TRACE_OP_SENDTO, started);
+	}
 	if (result < 0 && vita_length && winsock_error(result) == WSAEISCONN &&
 		is_connected_peer(socket, &vita_address, 1))
 	{
@@ -754,8 +913,10 @@ int posix_socket_sendto(int socket, const void *buffer, int length, int flags,
 
 int posix_socket_recv(int socket, void *buffer, int length, int flags)
 {
+	unsigned long long started = trace_op_begin();
 	int result = sceNetRecv(socket, buffer, (unsigned int)length, flags);
 
+	trace_op_end(TRACE_OP_RECV, started);
 	if (trace_on())
 		trace_transfer(socket, TRACE_RECEIVE, "recv", result, NULL, 0);
 	return answer(result);
@@ -768,8 +929,12 @@ int posix_socket_recvfrom(int socket, void *buffer, int length, int flags,
 	unsigned int vita_length = sizeof(vita_address);
 	int result;
 
+	unsigned long long started;
+
 	memset(&vita_address, 0, sizeof(vita_address));
+	started = trace_op_begin();
 	result = sceNetRecvfrom(socket, buffer, (unsigned int)length, flags, (SceNetSockaddr *)&vita_address, &vita_length);
+	trace_op_end(TRACE_OP_RECVFROM, started);
 	if (result >= 0)
 		address_from_vita(&vita_address, address, address_length);
 	if (trace_on())
@@ -790,6 +955,14 @@ int posix_socket_set_nonblocking(int socket, int nonblocking)
 {
 	int value = nonblocking ? 1 : 0;
 	int result = sceNetSetsockopt(socket, SCE_NET_SOL_SOCKET, SCE_NET_SO_NBIO, &value, sizeof(value));
+
+	if (result >= 0 && socket >= 0 && socket < SOCKET_IDENTIFIERS)
+	{
+		if (nonblocking)
+			socket_flags[socket] |= SOCKET_NONBLOCKING;
+		else
+			socket_flags[socket] &= ~SOCKET_NONBLOCKING;
+	}
 
 	if (trace_on())
 		trace_result(socket, "non-blocking", result, nonblocking ? " on" : " off");
@@ -895,8 +1068,10 @@ int posix_socket_getpeername(int socket, void *address, int *address_length)
 {
 	SceNetSockaddrIn vita_address;
 	unsigned int length = sizeof(vita_address);
+	unsigned long long started = trace_op_begin();
 	int result = sceNetGetpeername(socket, (SceNetSockaddr *)&vita_address, &length);
 
+	trace_op_end(TRACE_OP_PEERNAME, started);
 	if (result >= 0)
 		address_from_vita(&vita_address, address, address_length);
 	return answer(result);
@@ -980,19 +1155,32 @@ int posix_socket_select(int *read, int *read_count, int *write, int *write_count
 		error the next read will report: readable, as select says)
 		instead of an epoll made, filled, waited on and destroyed - ~10 ms
 		of the main thread a frame in a Blood Gulch solo match on the Vita.
-		Listening sockets, whose readiness is a connection, keep the epoll. */
+		A non-blocking listening socket, whose readiness is a connection,
+		is asked by an accept that does not wait, whose connection its next
+		accept hands out (listener_ready): the host's poll of its clients'
+		connections (network_connection_idle_server_reliable_endpoint) has
+		its listening socket in it, and was an epoll every frame. A
+		blocking listening socket keeps the epoll. */
 		unsigned long long started = trace_on() ? vita_host_time_us() : 0;
 		int peekable = 1;
 
 		for (index = 0; index < count; index++)
-			if (socket_listening[entries[index].socket])
+			if ((socket_flags[entries[index].socket] & (SOCKET_LISTENING | SOCKET_NONBLOCKING)) == SOCKET_LISTENING)
 				peekable = 0;
 		if (peekable)
 		{
 			for (index = 0; index < count; index++)
 			{
 				char byte;
-				int peek = sceNetRecv(entries[index].socket, &byte, 1, SCE_NET_MSG_PEEK | SCE_NET_MSG_DONTWAIT);
+				int peek;
+
+				if (socket_flags[entries[index].socket] & SOCKET_LISTENING)
+				{
+					if (listener_ready(entries[index].socket))
+						entries[index].ready = SCE_NET_EPOLLIN;
+					continue;
+				}
+				peek = sceNetRecv(entries[index].socket, &byte, 1, SCE_NET_MSG_PEEK | SCE_NET_MSG_DONTWAIT);
 
 				int error_number = peek < 0 ? winsock_error(peek) : 0;
 
@@ -1015,6 +1203,20 @@ int posix_socket_select(int *read, int *read_count, int *write, int *write_count
 				last_error = 0;
 			return ready;
 		}
+	}
+	/* (a listening socket's connection accepted ahead is readable now: the
+	epoll then only adds what else is ready, without waiting) */
+	for (index = 0; index < count; index++)
+		if ((entries[index].wanted & SCE_NET_EPOLLIN) && (socket_flags[entries[index].socket] & SOCKET_LISTENING) &&
+			listener_has_accepted_ahead(entries[index].socket))
+		{
+			entries[index].ready = SCE_NET_EPOLLIN;
+			ready = 1;
+		}
+	if (ready)
+	{
+		infinite = 0;
+		timeout = 0;
 	}
 	{
 	unsigned long long epoll_started = trace_on() ? vita_host_time_us() : 0;

@@ -147,6 +147,9 @@ struct vertex_variant
 	struct vertex_variant *next;
 	unsigned long provided_mask, packed_mask, color_mask;
 	unsigned long shader;
+	/* the Cg while its program is compiled in the background (shader 0
+	meanwhile: its draws are skipped), else NULL */
+	char *pending_source;
 };
 
 struct vertex_shader_object
@@ -180,6 +183,8 @@ struct fragment_entry
 	unsigned long hash;
 	struct nv2a_pixel_shader_key key;
 	unsigned long shader;
+	/* as vertex_variant's */
+	char *pending_source;
 };
 
 #define FRAGMENT_BUCKETS 1024
@@ -205,6 +210,9 @@ struct render_target_entry
 	levels' targets share one mip chain, the first level's texture covers
 	it; -1 when the chain could not be made */
 	long chain_levels;
+	/* whether a draw or a colour clear has gone into its target since it
+	was made (the worker's: execute_draw, execute_command) */
+	BOOL drawn;
 };
 
 #define RENDER_TARGET_BUCKET_COUNT 256
@@ -325,6 +333,8 @@ static struct gxm_device device;
 static struct
 {
 	unsigned long draws, immediate_draws, clears, presents, self_sampled, computed_draws, alpha_tested_draws, dropped_alpha_tests;
+	/* blended draws left out for sampling a texture still loading (draw_samples_stand_in) */
+	unsigned long stand_in_draws_left_out;
 	/* draws whose state (key, textures, samplers, render states) equals the previous draw's: what a delta record could skip */
 	unsigned long same_state_draws;
 	unsigned long skipped_no_program, skipped_no_target, skipped_shader;
@@ -360,6 +370,8 @@ void halo_render_draw_counts(unsigned long *stream, unsigned long *immediate)
 /* time spent in this layer (debug.gpu_stats) */
 unsigned long long vita_host_time_us(void);
 static unsigned long long layer_time, layer_entered, present_wait_time;
+/* the game's wait for the worker at this frame's present (the hitch log) */
+static unsigned long long frame_drain_us;
 static int layer_depth;
 
 static int gpu_stats_enabled(void);
@@ -551,24 +563,33 @@ static void surface_dimensions(const D3DSurface *surface, unsigned long *width, 
 		format == D3DFMT_LIN_D24S8 || format == D3DFMT_LIN_F24S8 || format == D3DFMT_LIN_D16 || format == D3DFMT_LIN_F16;
 }
 
-/* a target of the same size that has been neither drawn into nor sampled
-for ten seconds, taken over when no more targets can be made: they are
-never freed, and every map's surfaces add their own - after an hour and a
-level change the glow's 128x128 targets were not made any more (the bloom
-went). It leaves its old surface's bucket; that surface gets a new target
-if it comes back */
+/* a target that has been neither drawn into nor sampled for ten seconds,
+taken over when no more targets can be made: they are never freed, and
+every map's surfaces add their own - after an hour and a level change the
+glow's 128x128 targets were not made any more (the bloom went). One of the
+same size is taken as it is; failing that, the stalest of another size is
+made again at this size (vgxm_target_remake gives its memory back first):
+a surface of a size no other target has - the active camouflage's 320x240
+copy of the screen, first drawn when a cloaked unit is first seen - could
+otherwise never get one once the limit was reached, and the cloaked units
+sampled its never-written memory and drew black. It leaves its old
+surface's bucket; that surface gets a new target if it comes back */
 static struct render_target_entry *render_target_recycle(unsigned long width, unsigned long height, BOOL depth)
 {
-	struct render_target_entry *entry, **link;
+	struct render_target_entry *entry, *stalest = NULL, **link;
 
 	for (entry = render_targets; entry; entry = entry->next)
 	{
-		if (entry->id && !entry->chain_levels && entry->target.width == width && entry->target.height == height &&
-			entry->target.depth == depth && entry->last_used + 300 < device.frame)
+		if (entry->id && !entry->chain_levels && entry->target.depth == depth && entry->last_used + 300 < device.frame)
 		{
-			break;
+			if (entry->target.width == width && entry->target.height == height)
+				break;
+			if (!stalest || entry->last_used < stalest->last_used)
+				stalest = entry;
 		}
 	}
+	if (!entry)
+		entry = stalest;
 	if (!entry)
 		return NULL;
 	for (link = render_target_bucket(entry->target.data); *link; link = &(*link)->next_in_bucket)
@@ -577,6 +598,21 @@ static struct render_target_entry *render_target_recycle(unsigned long width, un
 		{
 			*link = entry->next_in_bucket;
 			break;
+		}
+	}
+	if (entry->target.width != width || entry->target.height != height)
+	{
+		static unsigned long remade;
+
+		if (++remade <= 20)
+			platform_log("render target %lu remade from %lux%lu to %lux%lu (%lu so far)", entry->id,
+				entry->target.width, entry->target.height, width, height, remade);
+		if (!vgxm_target_remake(entry->id, width, height, depth, &entry->texture))
+		{
+			/* (its slot is empty now: the entry stays in the list, without
+			a target, and is never looked up again) */
+			entry->id = 0;
+			return NULL;
 		}
 	}
 	return entry;
@@ -670,6 +706,7 @@ static struct render_target_entry *render_target_get_version(const D3DSurface *s
 	entry->target.gl_width = width;
 	entry->target.gl_height = height;
 	entry->last_rendered = 0;
+	entry->drawn = FALSE;
 	entry->last_used = device.frame + 1;
 	entry->next_in_bucket = *render_target_bucket(entry->target.data);
 	*render_target_bucket(entry->target.data) = entry;
@@ -696,6 +733,18 @@ static struct render_target_entry *render_target_entry_find_version(unsigned lon
 	return best;
 }
 
+/* whether the game has rendered into this surface (it has an entry, with a
+target or without one) */
+static BOOL render_target_entry_known(unsigned long data)
+{
+	struct render_target_entry *entry;
+
+	for (entry = *render_target_bucket(data); entry; entry = entry->next_in_bucket)
+		if (entry->target.data == data && !entry->target.depth)
+			return TRUE;
+	return FALSE;
+}
+
 static struct render_target_entry *render_target_entry_find(unsigned long data)
 {
 	return render_target_entry_find_version(data, 0);
@@ -703,19 +752,47 @@ static struct render_target_entry *render_target_entry_find(unsigned long data)
 
 /* the targets of a texture the game renders level by level, re-made as one
 mip chain the first time it is sampled with its levels (the levels' earlier
-targets are left unused) */
+targets are left unused).
+
+Only the levels at least one GPU tile (32x32, SCE_GXM_TILE_SIZEX/Y) in
+each direction are chained: the water's 128x128 ripple map chains 128, 64
+and 32, and its 16x16 fourth level keeps a target of its own that nothing
+samples. The texture side of the layout (linear levels one after another,
+rows rounded up to 8 texels) is the one every mipmapped BGRA texture of the
+texture cache already uses on the hardware (vita_textures.c LINEAR_ROW), but
+the colour surfaces are not: the chain was the only place the GPU rendered
+into a linear surface narrower than a tile (16 texels, rows 64 bytes apart)
+or one that does not start a memory block, and b30's creek showed blue
+streaks on the hardware only (#13/#20; Vita3K samples its own copy of a
+render target's first level and cannot show it). With every chained level a
+whole number of tiles, each level's rows are whole tiles wide and start
+4 KB apart, however the pixel back end writes a tile out.
+HALO_TARGET_CHAIN_MIN_SIZE=16 chains the small level again (as before);
+HALO_TARGET_CHAIN=0 samples the first level only. */
 static void render_target_chain(struct render_target_entry *base, const struct xgpu_texture_description *description,
 	unsigned long data, unsigned long version)
 {
 	unsigned long ids[12], levels = description->levels, level;
 	struct vgxm_texture texture;
+	static long minimum_size = -1;
 
 	if (base->chain_levels)
 		return;
 	base->chain_levels = -1;
+	if (minimum_size < 0)
+	{
+		const char *setting = getenv("HALO_TARGET_CHAIN_MIN_SIZE");
+
+		minimum_size = setting && atol(setting) > 0 ? atol(setting) : 32;
+	}
 	if (levels > 12)
 		levels = 12;
-	if (description->linear || description->cube_map || description->depth > 1 ||
+	while (levels > 1 && ((base->target.width >> (levels - 1)) < (unsigned long)minimum_size ||
+		(base->target.height >> (levels - 1)) < (unsigned long)minimum_size))
+	{
+		levels--;
+	}
+	if (levels < 2 || description->linear || description->cube_map || description->depth > 1 ||
 		(base->target.width & (base->target.width - 1)) || (base->target.height & (base->target.height - 1)) ||
 		vgxm_target_create_chain(base->target.width, base->target.height, levels, ids, &texture) != 0)
 	{
@@ -843,6 +920,33 @@ static unsigned long constant_generation;
 static void constants_store(unsigned long first, const void *data, unsigned long count)
 {
 	int changed = memcmp(&CONSTANT(first), data, count * sizeof(CONSTANT(0))) != 0;
+
+	{
+		/* (debug) HALO_LIGHT_CHECK=1: a vertex constant written as a value
+		that is not a finite number (NaN or infinity: what it reaches draws
+		black on the SGX) is logged with its register */
+		static int check = -1;
+
+		if (check < 0)
+			check = getenv("HALO_LIGHT_CHECK") && atoi(getenv("HALO_LIGHT_CHECK"));
+		if (check)
+		{
+			const float *values = (const float *)data;
+			static unsigned long logged;
+			unsigned long index;
+
+			for (index = 0; index < count * 4; index++)
+			{
+				if (!(values[index] == values[index]) || values[index] > 3.0e38f || values[index] < -3.0e38f)
+				{
+					if (logged++ < 50)
+						platform_log("light check: vertex constant c%lu.%c = %f (frame %lu, write of %lu from c%lu)",
+							first + index / 4, "xyzw"[index % 4], (double)values[index], device.frame, count, first);
+					break;
+				}
+			}
+		}
+	}
 
 	if (changed)
 	{
@@ -1219,23 +1323,33 @@ D3DSIMPLERENDERSTATEENCODE: methods 0x40000 + 4 * n, n below 0x800), +1, or
 0 when the method is no simple state */
 static unsigned char simple_state_of_method[0x800];
 
+/* (each method's dirty bit, made with the table: the game sets 6500
+simple states a frame on b30, each through this call) */
+static unsigned char simple_dirty_bit_of_method[0x800];
+static int simple_state_tables_made;
+
 void D3DFASTCALL D3DDevice_SetRenderState_Simple(DWORD method, DWORD value)
 {
 	/* (the inline D3DDevice_SetRenderState stores the value after this
 	call: what the table holds is still the old value) */
 	unsigned long slot = (method - 0x40000UL) >> 2;
 
-	if (!simple_state_of_method[(D3DSIMPLERENDERSTATEENCODE[0] - 0x40000UL) >> 2])
+	if (!simple_state_tables_made)
 	{
 		unsigned long state;
 
 		for (state = 0; state < D3DRS_SIMPLE_MAX; state++)
+		{
 			simple_state_of_method[(D3DSIMPLERENDERSTATEENCODE[state] - 0x40000UL) >> 2] = (unsigned char)(state + 1);
+			simple_dirty_bit_of_method[(D3DSIMPLERENDERSTATEENCODE[state] - 0x40000UL) >> 2] =
+				(unsigned char)render_state_dirty_bit(state);
+		}
+		simple_state_tables_made = 1;
 	}
 	if ((method & 3) || slot >= sizeof(simple_state_of_method) || !simple_state_of_method[slot])
 		device_state_dirty = STATE_DIRTY_MATERIAL | STATE_DIRTY_VALUES;
 	else if (D3D__RenderState[simple_state_of_method[slot] - 1] != value)
-		device_state_dirty |= render_state_dirty_bit(simple_state_of_method[slot] - 1);
+		device_state_dirty |= simple_dirty_bit_of_method[slot];
 }
 
 void D3DFASTCALL D3DDevice_SetRenderState_Deferred(D3DRENDERSTATETYPE state, DWORD value)
@@ -1649,6 +1763,32 @@ static void dump_shader(const char *source, const char *kind, unsigned long id)
 	}
 }
 
+/* a variant's program, asked for again while it compiles in the background
+(vgxm_shader_request); its Cg is freed once there is an answer */
+static void vertex_variant_resolve(struct vertex_shader_object *program, struct vertex_variant *variant)
+{
+	char *source = variant->pending_source;
+	unsigned long shader = vgxm_shader_request(source, 0);
+
+	if (shader == VGXM_SHADER_PENDING)
+	{
+		variant->shader = 0;
+		return;
+	}
+	variant->shader = shader;
+	variant->pending_source = NULL;
+	if (!shader || debug_settings_dump())
+	{
+		dump_shader(source, "vs", hash_words(source, strlen(source) & ~3UL));
+		if (debug_settings_dump())
+			platform_log("vertex shader %lu (inputs %04lx): vs_%08lx.cg", program->id, variant->provided_mask,
+				hash_words(source, strlen(source) & ~3UL));
+	}
+	if (!shader)
+		platform_log("vertex shader %lu (inputs %04lx) does not compile", program->id, variant->provided_mask);
+	free(source);
+}
+
 /* the program's Cg for the inputs the declaration provides */
 static unsigned long vertex_shader_get(struct vertex_shader_object *program, unsigned long provided_mask,
 	unsigned long packed_mask, unsigned long color_mask)
@@ -1661,6 +1801,8 @@ static unsigned long vertex_shader_get(struct vertex_shader_object *program, uns
 		if (variant->provided_mask == provided_mask && variant->packed_mask == packed_mask &&
 			variant->color_mask == color_mask)
 		{
+			if (variant->pending_source)
+				vertex_variant_resolve(program, variant);
 			return variant->shader;
 		}
 	}
@@ -1670,15 +1812,31 @@ static unsigned long vertex_shader_get(struct vertex_shader_object *program, uns
 	variant->color_mask = color_mask;
 	source = nv2a_vertex_shader_to_cg(program->instructions, program->instruction_count, provided_mask, packed_mask,
 		color_mask);
-	variant->shader = vgxm_shader_get(source, 0);
-	if (!variant->shader || debug_settings_dump())
-		dump_shader(source, "vs", hash_words(source, strlen(source) & ~3UL));
-	if (!variant->shader)
-		platform_log("vertex shader %lu (inputs %04lx) does not compile", program->id, provided_mask);
-	free(source);
+	variant->pending_source = source;
+	vertex_variant_resolve(program, variant);
 	variant->next = program->variants;
 	program->variants = variant;
 	return variant->shader;
+}
+
+/* as vertex_variant_resolve */
+static void fragment_entry_resolve(struct fragment_entry *entry)
+{
+	char *source = entry->pending_source;
+	unsigned long shader = vgxm_shader_request(source, 1);
+
+	if (shader == VGXM_SHADER_PENDING)
+	{
+		entry->shader = 0;
+		return;
+	}
+	entry->shader = shader;
+	entry->pending_source = NULL;
+	if (!shader && !debug_settings_dump())
+		dump_shader(source, "ps", entry->hash);
+	if (!shader)
+		platform_log("pixel shader %08lx does not compile", entry->hash);
+	free(source);
 }
 
 typedef char pixel_shader_key_size_assert[sizeof(struct nv2a_pixel_shader_key) % 4 == 0 ? 1 : -1];
@@ -1692,7 +1850,11 @@ static unsigned long fragment_shader_get(const struct nv2a_pixel_shader_key *key
 	char *source;
 
 	if (last && !memcmp(&last->key, key, sizeof(*key)))
+	{
+		if (last->pending_source)
+			fragment_entry_resolve(last);
 		return last->shader;
+	}
 	hash = hash_words(key, sizeof(*key));
 	bucket = &fragment_buckets[hash % FRAGMENT_BUCKETS];
 	for (entry = *bucket; entry; entry = entry->next)
@@ -1700,6 +1862,8 @@ static unsigned long fragment_shader_get(const struct nv2a_pixel_shader_key *key
 		if (entry->hash == hash && !memcmp(&entry->key, key, sizeof(*key)))
 		{
 			last = entry;
+			if (entry->pending_source)
+				fragment_entry_resolve(entry);
 			return entry->shader;
 		}
 	}
@@ -1711,12 +1875,8 @@ static unsigned long fragment_shader_get(const struct nv2a_pixel_shader_key *key
 	from can then still be read) */
 	if (debug_settings_dump())
 		dump_shader(source, "ps", hash);
-	entry->shader = vgxm_shader_get(source, 1);
-	if (!entry->shader && !debug_settings_dump())
-		dump_shader(source, "ps", hash);
-	if (!entry->shader)
-		platform_log("pixel shader %08lx does not compile", hash);
-	free(source);
+	entry->pending_source = source;
+	fragment_entry_resolve(entry);
 	entry->next = *bucket;
 	*bucket = entry;
 	last = entry;
@@ -1823,6 +1983,11 @@ struct record_targets
 /* (what the game's thread writes into a record comes first, together - a
 record is written into a cold ring entry, where every line touched is a
 cache miss - then what the worker fills in) */
+struct draw_segment
+{
+	unsigned long first_index, index_count, visibility_index;
+};
+
 struct render_command
 {
 	unsigned long kind;
@@ -1842,6 +2007,11 @@ struct render_command
 	BOOL immediate;
 	/* the copy of a small target a stage reads */
 	unsigned long texture_version[D3DTSS_MAXSTAGES];
+	/* (immediate draws merged across visibility tests, immediate_end) more
+	than one: the draw is issued once per segment, each its own index range
+	and visibility slot; 0 or 1: as one draw */
+	unsigned long segment_count;
+	const struct draw_segment *segments;
 	struct vgxm_draw draw;
 	/* (the worker's) */
 	BOOL skip;
@@ -1910,6 +2080,10 @@ static unsigned long stage_texture_mode_of(const struct nv2a_pixel_shader_key *k
 }
 
 /* the targets of a record; FALSE if there is nothing to draw into */
+/* the colour target of the worker's last bound targets
+(bind_recorded_targets), marked drawn once a draw or a clear goes in */
+static struct render_target_entry *worker_color_entry;
+
 static BOOL bind_recorded_targets(const struct render_command *command, BOOL *has_depth)
 {
 	/* the entries of the last record's targets, reused while the surfaces
@@ -1957,6 +2131,7 @@ static BOOL bind_recorded_targets(const struct render_command *command, BOOL *ha
 	if (depth)
 		depth->last_used = device.frame + 1;
 	vgxm_set_targets(color ? color->id : 0, depth ? depth->id : 0);
+	worker_color_entry = color;
 	*has_depth = depth != NULL;
 	return TRUE;
 }
@@ -1973,7 +2148,11 @@ static void bind_recorded_textures(struct render_command *command, float texture
 		const struct vgxm_texture *source;
 		unsigned long control[4];
 		DWORD state[6];
+		unsigned long levels;
 	} sampled_key[D3DTSS_MAXSTAGES];
+	/* the render targets the stages sample (their scenes are waited for:
+	vgxm_note_sampled_target) */
+	unsigned long sampled_targets[D3DTSS_MAXSTAGES] = { 0 };
 	int stage;
 
 	for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
@@ -1983,6 +2162,7 @@ static void bind_recorded_textures(struct render_command *command, float texture
 		const struct vgxm_texture *source = NULL;
 		struct xgpu_texture_description description;
 		struct render_target_entry *target;
+		unsigned long sampled_levels;
 		DWORD *state = command->sampler_state[stage];
 
 		texture_scale[stage][0] = texture_scale[stage][1] = 1.0f;
@@ -1993,9 +2173,27 @@ static void bind_recorded_textures(struct render_command *command, float texture
 		if (!command->texture_present[stage] || !header[1] || mode == 0 || mode == 0x04 || mode == 0x05 || mode == 0x11)
 			continue;
 		target = render_target_entry_find_version(header[1], command->texture_version[stage]);
+		if (target && !target->drawn && !target->chain_levels)
+		{
+			/* a target nothing has been drawn into yet: its memory is the
+			zeros it was made with. The screen effects' copies are drawn
+			by one pass and sampled by the next; when the copy's draw was
+			left out (its program still compiling, or a compile that
+			failed late in a session) the next pass drew the zeros over
+			the whole screen - a zoomed scope went black. Left out as
+			well, so the picture stays as it was. */
+			static unsigned long logged;
+
+			if (logged++ < 8)
+				platform_log("draw left out: stage %d samples render target %08lx before anything was drawn into it",
+					stage, (unsigned long)header[1]);
+			command->skip = TRUE;
+			continue;
+		}
 		if (target)
 		{
 			target->last_used = device.frame + 1;
+			sampled_targets[stage] = target->id;
 			xgpu_texture_describe(header[3], header[4], &description);
 			{
 				/* (HALO_TARGET_CHAIN=0: level 0 only, as before) */
@@ -2035,6 +2233,21 @@ static void bind_recorded_textures(struct render_command *command, float texture
 				(description.levels < (unsigned long)target->chain_levels ? description.levels : (unsigned long)target->chain_levels) : 1;
 			description.cube_map = FALSE;
 		}
+		else if (render_target_entry_known(header[1]))
+		{
+			/* a surface the game renders into that has no target now (none
+			could be made): its own memory is never written - the targets
+			are the GPU's - so sampling it reads zeros, which drew the
+			active camouflage black. The draw is left out instead (a
+			cloaked unit is then simply unseen) */
+			static unsigned long logged;
+
+			if (logged++ < 8)
+				platform_log("draw left out: stage %d samples render target %08lx, which has no target", stage,
+					(unsigned long)header[1]);
+			command->skip = TRUE;
+			continue;
+		}
 		else
 		{
 			source = vita_texture_get(header, command->palette[stage], &description);
@@ -2059,16 +2272,29 @@ static void bind_recorded_textures(struct render_command *command, float texture
 			continue;
 		if (description.levels <= 1)
 			state[2] = D3DTEXF_NONE;
+		/* a chained target samples the levels the game declares now, and
+		only its first with no mip filter (D3DTEXF_NONE: GXM's mip filter
+		off still picks the nearest of all the texture's levels) */
+		sampled_levels = 0;
+		if (target && target->chain_levels > 1 &&
+			(state[2] == D3DTEXF_NONE || description.levels < (unsigned long)target->chain_levels))
+		{
+			sampled_levels = state[2] == D3DTEXF_NONE ? 1 : description.levels;
+		}
 		if (sampled_key[stage].source != source ||
 			memcmp(sampled_key[stage].control, source->control, sizeof(source->control)) ||
-			memcmp(sampled_key[stage].state, state, sizeof(sampled_key[stage].state)))
+			memcmp(sampled_key[stage].state, state, sizeof(sampled_key[stage].state)) ||
+			sampled_key[stage].levels != sampled_levels)
 		{
 			sampled[stage] = *source;
 			vgxm_texture_set_sampler(&sampled[stage], state[0], state[1], state[2], state[3], state[4],
 				dword_to_float(state[5]));
+			if (sampled_levels)
+				vgxm_texture_set_level_count(&sampled[stage], sampled_levels);
 			sampled_key[stage].source = source;
 			memcpy(sampled_key[stage].control, source->control, sizeof(source->control));
 			memcpy(sampled_key[stage].state, state, sizeof(sampled_key[stage].state));
+			sampled_key[stage].levels = sampled_levels;
 		}
 		command->draw.textures[stage] = &sampled[stage];
 		command->key.sampler_type[stage] = description.cube_map ? _xgpu_sampler_cube :
@@ -2087,6 +2313,9 @@ static void bind_recorded_textures(struct render_command *command, float texture
 			command->key.volume_width_log2[stage] = width;
 		}
 	}
+	if (!command->skip)
+		for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
+			vgxm_note_sampled_target(sampled_targets[stage]);
 }
 
 /* HALO_DRAW_PROFILE=1: where a draw's CPU goes, on the game thread (the
@@ -2542,6 +2771,76 @@ static void execute_draw(struct render_command *command)
 	}
 	draw->fragment_shader = fragment_shader_get(&command->key);
 	{
+		/* (debug) HALO_TRACE_CAMO=n: the first n draws of the active
+		camouflage (rasterizer_xbox_active_camouflage.c): the screen copy
+		into the secondary target (modes 1, a 320x240 target), the cloaked
+		model's depth pass (no colour writes) and its distortion pass
+		(modes 0x2623), with their state */
+		static long trace = -1, traced;
+
+		if (trace < 0)
+		{
+			const char *setting = getenv("HALO_TRACE_CAMO");
+			trace = setting ? atol(setting) : 0;
+		}
+		if (trace && traced < trace && command->targets && command->targets->color_valid)
+		{
+			unsigned long width = 0, height = 0;
+			BOOL depth_surface;
+			BOOL distortion = command->key.texture_modes == 0x2623;
+			BOOL depth_pass = draw->color_write == 0 && command->key.alpha_test_function && command->key.texture_modes == 1;
+
+			surface_dimensions(&command->targets->color_surface, &width, &height, &depth_surface);
+			if (distortion || (width == 320 && height == 240) || depth_pass)
+			{
+				const float *b = (const float *)draw->vertex_chunks[VITA_VC_B];
+				const float *fa = (const float *)draw->fragment_uniforms[0];
+				const float *fb = (const float *)draw->fragment_uniforms[1];
+
+				traced++;
+				platform_log("camo trace %ld: %s frame %lu target %08lx %lux%lu vs %lu ps %08lx modes %08lx "
+					"z %d/%d func %lu cw %08lx blend %d %lu/%lu at %u indices %lu",
+					traced, distortion ? "distortion" : depth_pass ? "depth pass" : "copy", device.frame,
+					(unsigned long)command->targets->color_surface.Data, width, height, command->program->id,
+					hash_words(&command->key, sizeof(command->key)), (unsigned long)command->key.texture_modes,
+					(int)draw->depth_test, (int)draw->depth_write, draw->depth_function, draw->color_write, (int)draw->blend,
+					draw->blend_source, draw->blend_destination, (unsigned)command->key.alpha_test_function,
+					(unsigned long)draw->index_count);
+				for (stage = 0; stage < 4; stage++)
+				{
+					if (command->texture_present[stage] && command->texture_header[stage][1])
+					{
+						struct render_target_entry *entry = render_target_entry_find_version(command->texture_header[stage][1],
+							command->texture_version[stage]);
+
+						platform_log("  stage %d: data %08lx version %lu %s sampler %d scale %.6f %.6f bound %d",
+							stage, (unsigned long)command->texture_header[stage][1], command->texture_version[stage],
+							entry ? "render target" : "texture", command->key.sampler_type[stage],
+							texture_scale[stage][0], texture_scale[stage][1], draw->textures[stage] != NULL);
+					}
+				}
+				{
+					unsigned long a;
+
+					for (a = 0; a < draw->attribute_count; a++)
+						platform_log("  attribute v%u: format %u components %u stream %u offset %u stride %lu",
+							draw->attributes[a].reg, draw->attributes[a].format, draw->attributes[a].components,
+							draw->attributes[a].stream, draw->attributes[a].offset,
+							(unsigned long)draw->strides[draw->attributes[a].stream]);
+				}
+				if (b)
+					platform_log("  c12..c14: %g %g %g %g | %g %g %g %g | %g %g %g %g",
+						b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11]);
+				if (fa)
+					platform_log("  final c0: %g %g %g %g", fa[VITA_FU_PS_FINAL_C0 * 4], fa[VITA_FU_PS_FINAL_C0 * 4 + 1],
+						fa[VITA_FU_PS_FINAL_C0 * 4 + 2], fa[VITA_FU_PS_FINAL_C0 * 4 + 3]);
+				if (fb)
+					platform_log("  texture scale 2: %g %g", fb[(VITA_FU_TEXTURE_SCALE - VITA_FU_A_COUNT + 2) * 4],
+						fb[(VITA_FU_TEXTURE_SCALE - VITA_FU_A_COUNT + 2) * 4 + 1]);
+			}
+		}
+	}
+	{
 		/* (debug) HALO_TRACE_LINEAR=1: the first draws that sample a 640x480
 		linear texture (the movie), with their vertices */
 		static int trace = -1, traced;
@@ -2597,7 +2896,7 @@ static void execute_draw(struct render_command *command)
 			if (named_pair[index] == pair)
 				per_pair++;
 		}
-		if (index == named_count && named_count < 64 && per_pair < 8)
+		if (index == named_count && named_count < 64 && per_pair < 8 && draw->fragment_shader)
 		{
 			unsigned long hash = hash_words(&command->key, sizeof(command->key));
 
@@ -2620,7 +2919,28 @@ static void execute_draw(struct render_command *command)
 	DRAW_PROFILE_ADD(6, profile_from);
 	draw->vertex_input_mask = command->program->input_mask;
 	draw->vertex_program_hash = command->program->instruction_hash;
-	vgxm_draw(draw);
+	if (command->segment_count > 1)
+	{
+		/* one draw per visibility test, as they were recorded: the same
+		state, each its own triangles and slot */
+		const unsigned short *indices = draw->indices;
+		unsigned long index_count = draw->index_count, visibility_index = draw->visibility_index, segment;
+
+		for (segment = 0; segment < command->segment_count; segment++)
+		{
+			draw->indices = indices + command->segments[segment].first_index;
+			draw->index_count = command->segments[segment].index_count;
+			draw->visibility_index = command->segments[segment].visibility_index;
+			vgxm_draw(draw);
+		}
+		draw->indices = indices;
+		draw->index_count = index_count;
+		draw->visibility_index = visibility_index;
+	}
+	else
+		vgxm_draw(draw);
+	if (worker_color_entry && draw->color_write)
+		worker_color_entry->drawn = TRUE;
 	DRAW_PROFILE_ADD(7, profile_from);
 }
 
@@ -2647,6 +2967,8 @@ static void execute_command(struct render_command *command)
 			if (!has_depth)
 				flags &= ~(D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL);
 			vgxm_clear(flags, command->clear_color, command->clear_depth, command->clear_stencil, command->clip);
+			if (worker_color_entry && (flags & D3DCLEAR_TARGET))
+				worker_color_entry->drawn = TRUE;
 		}
 		break;
 	case _command_present:
@@ -2774,6 +3096,41 @@ static unsigned long last_recorded_target;
 static BOOL surface_is_small_cached(const D3DSurface *surface);
 static BOOL surface_is_depth_cached(const D3DSurface *surface);
 
+extern D3DBaseTexture d3d_stand_in_textures[];
+extern const unsigned long d3d_stand_in_texture_count;
+
+/* whether a stage the pixel shader reads has a texture streaming's stand-in
+bound (rasterizer_xbox.c binds a texture still loading by a copy of the
+default texture's header). Such a blended draw is left out until the bitmap
+is in: the stand-ins are opaque white or grey, which the blended passes (the
+assault rifle's compass, decals, effects) drew as white blocks. */
+static BOOL draw_samples_stand_in(void)
+{
+	DWORD modes = D3D__RenderState[D3DRS_PSTEXTUREMODES];
+	DWORD stage;
+	/* (debug) HALO_STAND_IN_BLENDED=1: drawn with the stand-in, as before */
+	static int blended = -1;
+
+	if (blended < 0)
+		blended = getenv("HALO_STAND_IN_BLENDED") && atoi(getenv("HALO_STAND_IN_BLENDED")) != 0;
+	if (blended)
+		return FALSE;
+
+	for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
+	{
+		const D3DBaseTexture *texture = device.textures[stage];
+
+		if (((modes >> (stage * 5)) & 0x1f) && texture >= &d3d_stand_in_textures[0] &&
+			texture < &d3d_stand_in_textures[d3d_stand_in_texture_count])
+		{
+			if (stats.stand_in_draws_left_out++ < 4)
+				platform_log("blended draw left out: stage %lu samples a texture still loading", (unsigned long)stage);
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
 static BOOL surface_is_small(const D3DSurface *surface)
 {
 	unsigned long width, height;
@@ -2824,6 +3181,10 @@ static struct
 	int triangles;
 	unsigned short *indices;
 	unsigned long index_count, index_capacity;
+	/* the visibility segments of a draw merged across visibility tests:
+	where each test's triangles start in the indices, and its slot */
+	struct draw_segment *segments;
+	unsigned long segment_count, segment_capacity;
 } held_immediate;
 
 static int immediate_triangle_family(D3DPRIMITIVETYPE type)
@@ -2917,6 +3278,23 @@ static void immediate_commit_held(void)
 		draw->index_count = held_immediate.index_count;
 		draw->primitive = D3DPT_TRIANGLELIST;
 		stats.copied_indices += held_immediate.index_count * sizeof(unsigned short);
+		if (held_immediate.segment_count > 1)
+		{
+			struct draw_segment *segments = vgxm_ring_alloc(held_immediate.segment_count * sizeof(*segments), 16);
+			unsigned long segment;
+
+			if (!segments)
+				return;
+			for (segment = 0; segment < held_immediate.segment_count; segment++)
+			{
+				segments[segment] = held_immediate.segments[segment];
+				segments[segment].index_count = (segment + 1 < held_immediate.segment_count ?
+					held_immediate.segments[segment + 1].first_index : held_immediate.index_count) -
+					held_immediate.segments[segment].first_index;
+			}
+			command->segments = segments;
+			command->segment_count = held_immediate.segment_count;
+		}
 	}
 	else if (needs_conversion(held_immediate.type))
 	{
@@ -3025,6 +3403,8 @@ static struct render_command *command_begin(unsigned long kind)
 		}
 		if (kind == _command_draw && (skip_draws || (skip_blended && D3D__RenderState[D3DRS_ALPHABLENDENABLE])))
 			return NULL;
+		if (kind == _command_draw && D3D__RenderState[D3DRS_ALPHABLENDENABLE] && draw_samples_stand_in())
+			return NULL;
 		{
 			/* HALO_SKIP_ADDITIVE=1: no additive blends (ONE, ONE: the lighting
 			passes and glows); HALO_SKIP_ALPHA=1: no alpha blends (SRCALPHA,
@@ -3101,6 +3481,7 @@ static struct render_command *command_begin(unsigned long kind)
 		command = &commands[command_head % COMMAND_RING];
 		command->kind = kind;
 		command->state = NULL;
+		command->segment_count = 0;
 		command->targets = targets;
 	}
 	command->color_version = 0;
@@ -3174,6 +3555,30 @@ static void worker_drain(void)
 			waited_from = vita_host_time_us();
 		}
 	}
+}
+
+/* (the tick thread, tick_thread.c halo_tick_wait_for_render: the main
+thread is waiting for the tick and records nothing) waits until the worker
+has carried out every frame recorded and the GPU has drawn them. The GPU
+reads the structure bsp's vertices and indices where the tag data holds
+them, and runs up to two frames behind the worker, which runs a frame
+behind the game: a switch_bsp that cleared the bsp (0xCD) and read the next
+one in while those frames were still being drawn drew the last frame before
+the load - the one left on the display for the whole load - with the
+level's geometry gone: a black screen on every section change on the
+hardware (#20), where the GPU is the frame's bottleneck. */
+void halo_render_wait_for_gpu(void)
+{
+	unsigned long long started = vita_host_time_us();
+
+	if (worker_enabled > 0)
+	{
+		while (__atomic_load_n(&frames_presented, __ATOMIC_ACQUIRE) < frames_requested)
+			vita_host_sleep_us(100);
+	}
+	vgxm_wait_gpu_idle();
+	platform_log("structure bsp switch: waited %llu us for the worker and the GPU",
+		(unsigned long long)(vita_host_time_us() - started));
 }
 
 /* has the target a depth format? (no GPU work: the worker creates targets) */
@@ -3616,6 +4021,24 @@ static BOOL shadow_states_match(const struct record_shadow_state *shadow)
 	}
 	return !memcmp(shadow->render_state, D3D__RenderState, sizeof(shadow->render_state)) &&
 		!memcmp(shadow->texture_state, D3D__TextureState, sizeof(shadow->texture_state));
+}
+
+static BOOL shadow_matches(const struct record_shadow_state *shadow, struct vertex_shader_object *program, BOOL immediate);
+
+/* shadow_matches but for the visibility test: the draws of consecutive
+visibility tests (a lens flare's occlusion quads, a thousand a frame on
+a10) differ in nothing else */
+static BOOL shadow_matches_but_visibility(struct record_shadow_state *shadow, struct vertex_shader_object *program, BOOL immediate)
+{
+	BOOL active = shadow->visibility_test_active, matches;
+	unsigned long index = shadow->visibility_index;
+
+	shadow->visibility_test_active = device.visibility_test_active;
+	shadow->visibility_index = device.visibility_index;
+	matches = shadow_matches(shadow, program, immediate);
+	shadow->visibility_test_active = active;
+	shadow->visibility_index = index;
+	return matches;
 }
 
 static BOOL shadow_matches(const struct record_shadow_state *shadow, struct vertex_shader_object *program, BOOL immediate)
@@ -4663,6 +5086,38 @@ static int immediate_merge_enabled(void)
 	return enabled;
 }
 
+/* HALO_VISIBILITY_MERGE=0: an immediate draw of another visibility test
+is never merged into the one before */
+static int visibility_merge_enabled(void)
+{
+	static int enabled = -1;
+
+	if (enabled < 0)
+	{
+		const char *setting = getenv("HALO_VISIBILITY_MERGE");
+		enabled = !setting || atoi(setting) != 0;
+	}
+	return enabled;
+}
+
+static int held_segment_add(unsigned long first_index, unsigned long visibility_index)
+{
+	if (held_immediate.segment_count == held_immediate.segment_capacity)
+	{
+		unsigned long capacity = held_immediate.segment_capacity ? held_immediate.segment_capacity * 2 : 64;
+		struct draw_segment *grown = realloc(held_immediate.segments, capacity * sizeof(*grown));
+
+		if (!grown)
+			return 0;
+		held_immediate.segments = grown;
+		held_immediate.segment_capacity = capacity;
+	}
+	held_immediate.segments[held_immediate.segment_count].first_index = first_index;
+	held_immediate.segments[held_immediate.segment_count].visibility_index = visibility_index;
+	held_immediate.segment_count++;
+	return 1;
+}
+
 /* the vertices, as the draw carries them (emitted packed already) */
 static void immediate_pack(const struct vgxm_draw *draw, unsigned long first, unsigned long count, float *packed)
 {
@@ -4702,17 +5157,39 @@ static void immediate_end(void)
 		else if (!shadow_matches(&held_shadow, current_program(), TRUE)) merge_rejected[4]++;
 	}
 	if (held_immediate.command && held_immediate.triangles && immediate_triangle_family(type) && immediate_merge_enabled() &&
-		held_immediate.constants == constant_generation && held_immediate.count + count <= 65536 &&
-		shadow_matches(&held_shadow, current_program(), TRUE))
+		held_immediate.constants == constant_generation && held_immediate.count + count <= 65536)
 	{
-		draw = &held_immediate.command->draw;
-		if (immediate_hold_room((held_immediate.count + count) * (held_immediate.stride / sizeof(float))) &&
-			immediate_hold_triangles(type, held_immediate.count, count))
+		/* the same state: its triangles join the held draw's; the same but
+		for the visibility test: they join it as a segment of their own,
+		issued as a draw of its own with its own slot (the worker), and
+		the game's thread records one draw for a run of tests (the index
+		data of a segment kept 4-byte aligned) */
+		unsigned long visibility_index = device.visibility_test_active ? device.visibility_index : 0;
+		int same = shadow_matches(&held_shadow, current_program(), TRUE);
+		int segment = !same && visibility_merge_enabled() && !(held_immediate.index_count & 1) &&
+			shadow_matches_but_visibility(&held_shadow, current_program(), TRUE);
+
+		if (same || segment)
 		{
-			immediate_pack(draw, 0, count, held_immediate.vertices + held_immediate.count * (held_immediate.stride / sizeof(float)));
-			held_immediate.count += count;
-			merged_immediate_draws++;
-			return;
+			unsigned long first_index = held_immediate.index_count;
+
+			draw = &held_immediate.command->draw;
+			if (immediate_hold_room((held_immediate.count + count) * (held_immediate.stride / sizeof(float))) &&
+				immediate_hold_triangles(type, held_immediate.count, count) &&
+				(!segment || held_segment_add(first_index, visibility_index)))
+			{
+				immediate_pack(draw, 0, count, held_immediate.vertices + held_immediate.count * (held_immediate.stride / sizeof(float)));
+				held_immediate.count += count;
+				merged_immediate_draws++;
+				if (segment)
+				{
+					held_shadow.visibility_test_active = device.visibility_test_active;
+					held_shadow.visibility_index = device.visibility_index;
+				}
+				return;
+			}
+			/* (a failed allocation: the indices added are dropped) */
+			held_immediate.index_count = first_index;
 		}
 	}
 	immediate_commit_held();
@@ -4758,6 +5235,8 @@ static void immediate_end(void)
 	held_immediate.stride = stride;
 	held_immediate.constants = constant_generation;
 	held_immediate.index_count = 0;
+	held_immediate.segment_count = 0;
+	held_segment_add(0, draw->visibility_index);
 	shadow_capture(&held_shadow, current_program(), TRUE, command->state);
 	held_immediate.triangles = immediate_triangle_family(type) && immediate_merge_enabled() &&
 		immediate_hold_triangles(type, 0, count);
@@ -5025,7 +5504,8 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		worker_drain();
 		if (halo_trace_active())
 			platform_log("trace: present %lu drained", device.frame);
-		present_wait_time += vita_host_time_us() - before;
+		frame_drain_us = vita_host_time_us() - before;
+		present_wait_time += frame_drain_us;
 		/* the next frame's ring: every snapshot is written anew */
 		vgxm_ring_next(device.frame + 1);
 		device.vertex_uniform_snapshot = NULL;
@@ -5047,8 +5527,10 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		/* the hitch log: a frame over 100 ms is named with what it spent
 		(the game's thread between presents, the wait for the worker, the
 		textures the worker decoded and the shaders compiled meanwhile) */
-		extern volatile unsigned long long vita_texture_build_us, vgxm_compile_us;
-		extern volatile unsigned long vita_texture_builds, vita_texture_build_bytes, vgxm_compiles;
+		extern volatile unsigned long long vita_texture_build_us, vgxm_compile_us, vgxm_shader_load_us, vgxm_link_us,
+			vgxm_cache_write_us;
+		extern volatile unsigned long vita_texture_builds, vita_texture_build_bytes, vgxm_compiles, vgxm_shader_loads,
+			vgxm_links, vgxm_compiles_background;
 		static unsigned long long previous_present;
 		static unsigned long hitches_logged;
 		unsigned long long now = vita_host_time_us();
@@ -5056,15 +5538,21 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		if (previous_present && now - previous_present > 100000ull && hitches_logged < 200)
 		{
 			hitches_logged++;
-			platform_log("hitch: frame %lu took %.1f ms; textures decoded %lu (%lu KB) in %.1f ms, shaders compiled %lu in %.1f ms",
+			platform_log("hitch: frame %lu took %.1f ms; textures decoded %lu (%lu KB) in %.1f ms, shaders compiled %lu in %.1f ms"
+				" (loaded %lu in %.1f ms, cache writes %.1f ms, linked %lu in %.1f ms, %lu compiled in the background),"
+				" waited %.1f ms for the worker",
 				device.frame, (now - previous_present) / 1000.0, vita_texture_builds, vita_texture_build_bytes / 1024,
-				vita_texture_build_us / 1000.0, vgxm_compiles, vgxm_compile_us / 1000.0);
+				vita_texture_build_us / 1000.0, vgxm_compiles, vgxm_compile_us / 1000.0, vgxm_shader_loads,
+				vgxm_shader_load_us / 1000.0, vgxm_cache_write_us / 1000.0, vgxm_links, vgxm_link_us / 1000.0, vgxm_compiles_background,
+				frame_drain_us / 1000.0);
 		}
 		vita_texture_build_us = 0;
 		vita_texture_builds = 0;
 		vita_texture_build_bytes = 0;
 		vgxm_compile_us = 0;
 		vgxm_compiles = 0;
+		vgxm_shader_load_us = vgxm_link_us = vgxm_cache_write_us = 0;
+		vgxm_shader_loads = vgxm_links = vgxm_compiles_background = 0;
 		previous_present = now;
 	}
 	{

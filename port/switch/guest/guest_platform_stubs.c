@@ -57,14 +57,7 @@ int platform_screen_mode(long *width, long *height)
 	return w > 0 && h > 0;
 }
 
-/* source/rasterizer/xbox/rasterizer_xbox_decals.c - the real GLES3
-backend (switch_d3d8_null.c's successor) doesn't have an equivalent for
-this contiguous-stream-attribute trick */
-void halo_d3d_stream_attribute(long reg, long stream)
-{
-	(void)reg;
-	(void)stream;
-}
+/* (halo_d3d_stream_attribute is d3d8_gl.c's own now, from the Vita fork) */
 
 /* frames between the 30 Hz ticks at the display's refresh rate
 (port/linux/game/render_interpolation.c), as sdl_platform.c answers it on

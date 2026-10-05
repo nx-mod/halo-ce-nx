@@ -44,7 +44,16 @@ int halo_epoch_threaded;
 
 /* ---------- the mutator */
 
-static uintptr_t mutator_stack_low, mutator_stack_high;
+/* (a thread is told by where its stack is: the frame address rather than a
+local's, which AddressSanitizer may keep on a "fake stack" in its heap -
+the tick then was not the mutator in ASan builds, its deletes were not
+deferred and switch_bsp did not wait for the render, and the builds
+crashed in a10 on races normal builds do not have) */
+
+/* (read inline too: halo_epoch_on_mutator_inline, render_epoch.h) */
+unsigned long halo_mutator_stack_low, halo_mutator_stack_high;
+#define mutator_stack_low halo_mutator_stack_low
+#define mutator_stack_high halo_mutator_stack_high
 
 #ifdef __vita__
 #include <psp2/kernel/threadmgr.h>
@@ -60,8 +69,7 @@ void halo_epoch_register_mutator(void)
 	guess from the stack size given at creation reached into the game
 	thread's stack, and the render thread deep in a recursion passed as
 	the tick) */
-	char probe;
-	uintptr_t here = (uintptr_t)&probe;
+	uintptr_t here = (uintptr_t)__builtin_frame_address(0);
 #ifdef __vita__
 	SceKernelThreadInfo info;
 
@@ -103,8 +111,7 @@ void halo_epoch_register_mutator(void)
 
 int halo_epoch_on_mutator(void)
 {
-	char probe;
-	uintptr_t here = (uintptr_t)&probe;
+	uintptr_t here = (uintptr_t)__builtin_frame_address(0);
 
 	return here >= mutator_stack_low && here < mutator_stack_high;
 }
@@ -164,8 +171,7 @@ static void stack_bounds(uintptr_t here, uintptr_t *low, uintptr_t *high)
 
 int halo_thread_index(void)
 {
-	char probe;
-	uintptr_t here = (uintptr_t)&probe;
+	uintptr_t here = (uintptr_t)__builtin_frame_address(0);
 	int index, count = __atomic_load_n(&thread_table_count, __ATOMIC_ACQUIRE);
 
 	for (index = 0; index < count; index++)

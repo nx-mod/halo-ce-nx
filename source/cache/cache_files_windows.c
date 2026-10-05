@@ -197,6 +197,11 @@ symbols in this file:
 int halo_thread_index(void);
 /* the cache file thread, by halo_thread_index (load_profile.c) */
 static int cache_file_thread_index = -1;
+/* (port) cache_file_read is called by the tick (sounds, the textures it
+predicts) and the render (textures) at once: a free request slot is
+claimed under this, or both took the same slot, one read was lost and its
+texture or sound never finished loading */
+static volatile int cache_request_claim_lock;
 #endif
 
 /* ---------- constants */
@@ -790,8 +795,18 @@ short cache_file_read(
 	boolean *completion_flag_reference,
 	boolean blocking)
 {
+#ifdef HALO_LINUX
+	short request_index;
+	struct cache_file_request *request;
+
+	while (__atomic_exchange_n(&cache_request_claim_lock, 1, __ATOMIC_ACQUIRE))
+		SwitchToThread();
+	request_index = cache_request_next_free_index();
+	request = cache_request_get(request_index);
+#else
 	short request_index = cache_request_next_free_index();
 	struct cache_file_request *request = cache_request_get(request_index);
+#endif
 
 	match_assert(
 		"c:\\halo\\SOURCE\\cache\\cache_files_windows.c",
@@ -823,9 +838,19 @@ short cache_file_read(
 	request->overlapped.OffsetHigh = 0;
 	request->overlapped.Offset = offset;
 	request->buffer = buffer;
+#ifdef HALO_LINUX
+	/* (the request is filled in before the cache file thread can see it
+	pending: on the Vita's cores it could see the flag before the fields
+	and read with the slot's last offset, size and completion flag) */
+	request->blocking = blocking;
+	request->running = FALSE;
+	__atomic_store_n(&request->pending, TRUE, __ATOMIC_RELEASE);
+	__atomic_store_n(&cache_request_claim_lock, 0, __ATOMIC_RELEASE);
+#else
 	request->pending = TRUE;
 	request->blocking = blocking;
 	request->running = FALSE;
+#endif
 	cache_file_windows_thread_wake();
 
 	return request_index;
@@ -1109,6 +1134,24 @@ static void cache_file_windows_thread_proc(
 			{
 				struct cache_file_request *request = cache_request_get(request_index);
 
+#ifdef HALO_LINUX
+				/* (port) a request the game waits for first, then the lowest
+				offset. The Xbox's test kept the first pending request unless a
+				later one was both further down the disc and not waited for -
+				so a frame waiting for a texture waited behind every predicted
+				resource queued before it (on the Vita's memory card, at
+				~13 MB/s, megabytes of them at a level's start). Only the order
+				of the reads changes. */
+				if (request->pending &&
+					!request->running &&
+					(!best_request ||
+						(request->blocking && !best_request->blocking) ||
+						(request->blocking == best_request->blocking &&
+							request->overlapped.Offset < best_request->overlapped.Offset)))
+				{
+					best_request = request;
+				}
+#else
 				if (request->pending &&
 					!request->running &&
 					(!best_request ||
@@ -1117,12 +1160,17 @@ static void cache_file_windows_thread_proc(
 				{
 					best_request = request;
 				}
+#endif
 			}
 
 			if (!best_request)
 			{
 				break;
 			}
+#ifdef HALO_LINUX
+			/* (the fields are read after the flag that published them) */
+			__atomic_thread_fence(__ATOMIC_ACQUIRE);
+#endif
 
 			file = cached_map_file_get_handle(cache_file_globals.open_map_file_index);
 			match_assert(

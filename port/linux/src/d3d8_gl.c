@@ -324,6 +324,11 @@ struct gl_device
 	dynamic vertex buffers keep each buffer's vertices at an offset into one
 	vertex buffer, and their triangles count from 0: contrails, lightning) */
 	UINT base_vertex_index;
+	/* halo_d3d_stream_attribute: an input register the stream draws take
+	from a stream of four floats per vertex instead of its current value
+	(extra_attribute_active FALSE: none) */
+	BOOL extra_attribute_active;
+	unsigned long extra_attribute_reg, extra_attribute_stream;
 
 	/* the current value of each input register (SetVertexData) */
 	float attributes[XGPU_VERTEX_ATTRIBUTE_COUNT][4];
@@ -3223,6 +3228,26 @@ static BOOL stream_has_colors(const struct vertex_shader_object *declaration, un
 }
 #endif
 
+/* whether halo_d3d_stream_attribute's register comes from its stream (the
+declaration does not provide it, and the stream is set) */
+static BOOL extra_attribute_streamed(const struct vertex_shader_object *declaration)
+{
+	unsigned long index;
+
+	if (!device.extra_attribute_active || !device.streams[device.extra_attribute_stream].data)
+		return FALSE;
+	for (index = 0; index < declaration->element_count; index++)
+	{
+		if (declaration->elements[index].reg == device.extra_attribute_reg &&
+			declaration->elements[index].type != D3DVSDT_NONE &&
+			device.streams[declaration->elements[index].stream].data)
+		{
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
 static void setup_streams(unsigned long first, unsigned long count)
 {
 	struct vertex_shader_object *declaration = device.vertex_shader;
@@ -3253,6 +3278,12 @@ static void setup_streams(unsigned long first, unsigned long count)
 			continue;
 		stream_buffers[stream] = 0;
 		total += (bytes + 15) & ~15UL;
+	}
+	if (extra_attribute_streamed(declaration))
+	{
+		unsigned long stride = device.streams[device.extra_attribute_stream].stride;
+
+		total += ((stride ? stride : 16) * count + 15) & ~15UL;
 	}
 	stream_reserve(total);
 	for (index = 0; index < declaration->element_count; index++)
@@ -3291,6 +3322,21 @@ static void setup_streams(unsigned long first, unsigned long count)
 				(GLsizei)stride, stream_offsets[stream] + element->offset);
 		}
 		enabled[element->reg] = TRUE;
+	}
+	if (extra_attribute_streamed(declaration))
+	{
+		/* (halo_d3d_stream_attribute's register: four floats a vertex from
+		the stream's first byte, after the declaration's) */
+		unsigned long stream = device.extra_attribute_stream;
+		unsigned long stride = device.streams[stream].stride ? device.streams[stream].stride : 16;
+		const unsigned char *base = PLATFORM_PHYSICAL_TO_VIRTUAL(device.streams[stream].data);
+		unsigned long offset;
+
+		offset = stream_upload(base + first * stride, stride * count);
+		stats.streamed_bytes += stride * count;
+		state_attribute_pointer((GLuint)device.extra_attribute_reg, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE,
+			(GLsizei)stride, offset);
+		enabled[device.extra_attribute_reg] = TRUE;
 	}
 	for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
 	{
@@ -3346,6 +3392,17 @@ void WINAPI D3DDevice_SetStreamSource(UINT stream_number, D3DVertexBuffer *strea
 		return;
 	device.streams[stream_number].data = stream_data ? stream_data->Data : 0;
 	device.streams[stream_number].stride = stride;
+}
+
+/* (port) the stream draws that follow take input register reg from stream
+stream (four floats a vertex, from its first byte) rather than from the
+register's current value, until reg -1 is given: the decals' batches carry
+each decal's colour per vertex this way (rasterizer_xbox_decals.c) */
+void halo_d3d_stream_attribute(long reg, long stream)
+{
+	device.extra_attribute_active = reg >= 0 && reg < XGPU_VERTEX_ATTRIBUTE_COUNT && stream >= 0 && stream < 16;
+	device.extra_attribute_reg = device.extra_attribute_active ? (unsigned long)reg : 0;
+	device.extra_attribute_stream = device.extra_attribute_active ? (unsigned long)stream : 0;
 }
 
 void WINAPI D3DDevice_SetIndices(D3DIndexBuffer *index_data, UINT base_vertex_index)
@@ -3616,6 +3673,9 @@ void WINAPI D3DDevice_Clear(DWORD count, CONST D3DRECT *rectangles, DWORD flags,
 
 /* ---------- presentation */
 
+/* (main.c, HALO_TEST_COMMANDS @shot) the next frame's screenshot name */
+extern char halo_screenshot_name[64];
+
 static void write_screenshot(struct render_target_entry *target)
 {
 	const char *directory = *config_string("debug.screenshot_directory") ?
@@ -3645,7 +3705,11 @@ static void write_screenshot(struct render_target_entry *target)
 #endif
 		pixels[row * 4 + 3] = 0xff;
 	}
-	snprintf(path, sizeof(path), "%s/frame%05lu.bmp", directory, device.frame);
+	if (halo_screenshot_name[0])
+		snprintf(path, sizeof(path), "%s/%s.bmp", directory, halo_screenshot_name);
+	else
+		snprintf(path, sizeof(path), "%s/frame%05lu.bmp", directory, device.frame);
+	halo_screenshot_name[0] = 0;
 	file = fopen(path, "wb");
 	if (file)
 	{
@@ -3697,7 +3761,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		if (trace_frame())
 			platform_log("present back buffer %08lx texture %u", (unsigned long)device.back_buffer.Data,
 				back_buffer->target.texture);
-		if (screenshot_every > 0 && device.frame % (unsigned long)screenshot_every == 0)
+		if ((screenshot_every > 0 && device.frame % (unsigned long)screenshot_every == 0) || halo_screenshot_name[0])
 			write_screenshot(back_buffer);
 
 		platform_video_drawable_size(&window_width, &window_height);
@@ -3800,6 +3864,13 @@ void vita_texture_locked(const DWORD *resource)
 int halo_trace_active(void)
 {
 	return 0;
+}
+
+/* (tick_thread.c, before a switch_bsp clears the structure bsp: the Vita's
+GPU reads the bsp's geometry in place, a frame or two late. GL copies what a
+draw reads when the draw is made, so there is nothing to wait for) */
+void halo_render_wait_for_gpu(void)
+{
 }
 
 void halo_render_draw_counts(unsigned long *stream, unsigned long *immediate)

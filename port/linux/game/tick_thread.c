@@ -29,6 +29,8 @@ void particle_systems_stress_update(void);
 void vita_host_pin_current_thread(int core) __attribute__((weak));
 void vita_host_sleep_us(unsigned long microseconds) __attribute__((weak));
 int halo_trace_active(void) __attribute__((weak));
+/* (the Vita's device, d3d8_gxm.c: waits for the frames the GPU has not drawn yet) */
+void halo_render_wait_for_gpu(void) __attribute__((weak));
 
 static int enabled = -1;
 static pthread_t thread;
@@ -43,6 +45,10 @@ static volatile int main_joining;
 static volatile short finished_elapsed;
 extern volatile short halo_render_elapsed_ticks;
 short halo_game_time_last_elapsed(void);
+/* ... and the fraction of a tick it left over */
+static volatile float finished_fraction = 1.0f;
+extern volatile float halo_render_tick_fraction;
+float game_time_get_tick_fraction(void);
 /* the poses the render draws while the next tick runs (render_interpolation.c) */
 void render_tick_poses_capture(void);
 void render_tick_poses_tick_started(void);
@@ -103,6 +109,7 @@ static void *tick_thread(void *unused)
 			lights_update_unattached();
 			rasterizer_decals_update_for_frame();
 			finished_elapsed = halo_game_time_last_elapsed();
+			finished_fraction = game_time_get_tick_fraction();
 			render_tick_poses_capture();
 			if (halo_trace_active && halo_trace_active())
 				platform_log("trace: tick updated");
@@ -113,7 +120,14 @@ static void *tick_thread(void *unused)
 
 				sound_render();
 				if (vita_host_time_us)
-					halo_tick_sound_us += vita_host_time_us() - sound_before;
+				{
+					unsigned long long sound_us = vita_host_time_us() - sound_before;
+
+					halo_tick_sound_us += sound_us;
+					/* (a sound update of over 100 ms, a hitch, is named) */
+					if (sound_us > 100000)
+						platform_log("sound-hitch: sound_render took %.1f ms", sound_us / 1000.0);
+				}
 				halo_tick_sound_ticks++;
 			}
 			last_tick_us = vita_host_time_us ? vita_host_time_us() - before : 0;
@@ -152,6 +166,30 @@ void halo_tick_thread_start(float delta)
 	__atomic_store_n(&started, started + 1, __ATOMIC_RELEASE);
 }
 
+/* calls the main thread made into the game state while a tick ran, made at
+the join instead (halo_tick_thread_defer) */
+#define MAXIMUM_DEFERRED_CALLS 16
+static void (*deferred_calls[MAXIMUM_DEFERRED_CALLS])(void);
+static unsigned long deferred_call_count;
+
+int halo_tick_thread_defer(void (*call)(void))
+{
+	/* (until the join: a tick that has finished still has its epoch open,
+	the marks it made not yet swept) */
+	if (enabled <= 0 || halo_epoch_on_mutator() ||
+		(__atomic_load_n(&finished, __ATOMIC_ACQUIRE) == started && !__atomic_load_n(&halo_epoch_active, __ATOMIC_ACQUIRE)) ||
+		deferred_call_count >= MAXIMUM_DEFERRED_CALLS)
+		return 0;
+	deferred_calls[deferred_call_count++] = call;
+	{
+		static unsigned long logged;
+
+		if (logged++ < 4)
+			platform_log("tick thread: a call into the game state from the main thread during a tick made at the join");
+	}
+	return 1;
+}
+
 void halo_tick_thread_join(void)
 {
 	unsigned long spins = 0;
@@ -165,18 +203,32 @@ void halo_tick_thread_join(void)
 	}
 	__atomic_store_n(&main_joining, 0, __ATOMIC_RELEASE);
 	halo_render_elapsed_ticks = finished_elapsed;
+	halo_render_tick_fraction = finished_fraction;
 	render_tick_poses_publish();
 	halo_epoch_end();
+	if (deferred_call_count)
+	{
+		unsigned long index, count = deferred_call_count;
+
+		deferred_call_count = 0;
+		for (index = 0; index < count; index++)
+			deferred_calls[index]();
+	}
 }
 
 void halo_tick_wait_for_render(void)
 {
-	if (enabled <= 0 || !halo_epoch_on_mutator())
-		return;
-	if (halo_trace_active && halo_trace_active())
-		platform_log("trace: tick waits for the render");
-	while (!__atomic_load_n(&main_joining, __ATOMIC_ACQUIRE))
-		pause_briefly();
+	if (enabled > 0 && halo_epoch_on_mutator())
+	{
+		if (halo_trace_active && halo_trace_active())
+			platform_log("trace: tick waits for the render");
+		while (!__atomic_load_n(&main_joining, __ATOMIC_ACQUIRE))
+			pause_briefly();
+	}
+	/* then (with the tick on its thread or not) until the GPU has drawn
+	what the render recorded: it reads the bsp's geometry in place */
+	if (halo_render_wait_for_gpu)
+		halo_render_wait_for_gpu();
 }
 
 unsigned long long halo_tick_thread_last_us(void)

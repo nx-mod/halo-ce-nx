@@ -384,6 +384,7 @@ void platform_log(const char *format, ...);
 #include "networking/network_game_globals.h"
 #include "camera/director.h"
 #include "camera/observer.h"
+#include "objects/objects.h"
 #include "cutscene/cinematics.h"
 #include "effects/player_effects.h"
 #include "physics/collision_usage.h"
@@ -903,9 +904,16 @@ boolean main_saving_map(
 	return main_globals.saving_map;
 }
 
+#ifdef HALO_LINUX
+static void main_checkpoint_cancelled(char const *by);
+#endif
+
 void main_save_cancel(
 	void)
 {
+#ifdef HALO_LINUX
+	main_checkpoint_cancelled("game_save_cancel");
+#endif
 	main_globals.saving_map = FALSE;
 	return;
 }
@@ -954,6 +962,9 @@ void main_reset_map(
 void main_revert_map(
 	void)
 {
+#ifdef HALO_LINUX
+	main_checkpoint_cancelled("a revert");
+#endif
 	main_globals.switch_to_structure_bsp_index = NONE;
 	main_globals.saving_map = FALSE;
 	main_globals.revert_map = TRUE;
@@ -964,15 +975,25 @@ void main_revert_map(
 void main_skip_cinematic(
 	void)
 {
+#ifdef HALO_LINUX
+	main_checkpoint_cancelled("a cinematic skip");
+#endif
 	main_globals.switch_to_structure_bsp_index = NONE;
 	main_globals.saving_map = FALSE;
 	main_globals.skip_cinematic = TRUE;
 	return;
 }
 
+#ifdef HALO_LINUX
+static void main_checkpoint_asked(char const *how);
+#endif
+
 void main_save_map_nonsafe(
 	void)
 {
+#ifdef HALO_LINUX
+	main_checkpoint_asked("game_save_totally_unsafe");
+#endif
 	main_globals.saving_map = TRUE;
 	main_globals.save_map_safely = FALSE;
 	return;
@@ -1604,11 +1625,58 @@ static long sort_desired_local_player_controllers(
 	return (value_a >= value_b) - 1;
 }
 
+#ifdef HALO_LINUX
+/* (port) The checkpoints in the log: who asked for one, how long it waited
+and what game_safe_to_save refused meanwhile (game.c), and when it gave up.
+A level's scripts ask with game_save (gives up after 240 checks, 8 s at
+30 frames a second) or game_save_no_timeout (waits as long as it takes,
+and keeps a later request waiting with it): without these lines a log
+said nothing between "checkpoint taken" lines, whether no checkpoint was
+asked for or one waited minutes for a moment safe enough (GitHub #10) */
+void platform_log(const char *format, ...);
+char const *game_unsafe_to_save_reason(char *buffer, long size);
+static unsigned long checkpoint_log_lines;
+static long checkpoint_wait_checks;
+
+#define CHECKPOINT_LOG_LINES 96
+
+static void main_checkpoint_asked(
+	char const *how)
+{
+	if (checkpoint_log_lines++ < CHECKPOINT_LOG_LINES)
+		platform_log("checkpoint: %s asked for by %s at tick %ld", how, hs_runtime_get_executing_thread_name(),
+			game_in_progress() ? (long)game_time_get() : 0L);
+	checkpoint_wait_checks = 0;
+}
+
+/* a checkpoint asked for and not yet taken, dropped */
+static void main_checkpoint_cancelled(
+	char const *by)
+{
+	if (main_globals.saving_map && checkpoint_log_lines++ < CHECKPOINT_LOG_LINES)
+		platform_log("checkpoint: the one asked for cancelled by %s after %ld frames", by, checkpoint_wait_checks);
+}
+
+static void main_checkpoint_waiting(
+	char const *what)
+{
+	char buffer[256];
+	char const *reason = game_unsafe_to_save_reason(buffer, sizeof(buffer));
+
+	if (checkpoint_log_lines++ < CHECKPOINT_LOG_LINES)
+		platform_log("checkpoint: %s after %ld frames: not safe: %s", what, checkpoint_wait_checks,
+			reason ? reason : "(safe now)");
+}
+#endif
+
 void main_save_map_safe(
 	void)
 {
 	if (!main_globals.saving_map || main_globals.save_map_timeout)
 	{
+#ifdef HALO_LINUX
+		main_checkpoint_asked("game_save");
+#endif
 		main_globals.saving_map = TRUE;
 		main_globals.save_map_safely = TRUE;
 		main_globals.save_map_timeout = TRUE;
@@ -1624,6 +1692,9 @@ void main_save_map_no_timeout(
 {
 	if (!main_globals.saving_map || main_globals.save_map_timeout)
 	{
+#ifdef HALO_LINUX
+		main_checkpoint_asked("game_save_no_timeout");
+#endif
 		main_globals.saving_map = TRUE;
 		main_globals.save_map_safely = TRUE;
 		main_globals.ticks_until_next_save_check = 0;
@@ -1936,9 +2007,15 @@ static void main_save_map_private(
 
 		if (save_map_safely)
 		{
+#ifdef HALO_LINUX
+			checkpoint_wait_checks++;
+#endif
 			if (main_globals.ticks_unable_to_save++ >= 240 &&
 				main_globals.save_map_timeout)
 			{
+#ifdef HALO_LINUX
+				main_checkpoint_waiting("given up");
+#endif
 				if (debug_game_save)
 					console_printf(FALSE, "gave up trying to save");
 				main_globals.saving_map = FALSE;
@@ -1954,6 +2031,12 @@ static void main_save_map_private(
 				else
 				{
 					main_globals.safe_intervals = 0;
+#ifdef HALO_LINUX
+					/* (every 30 s of waiting: a checkpoint without a
+					timeout can wait for the rest of the level) */
+					if (checkpoint_wait_checks >= 900 && checkpoint_wait_checks % 900 < 10)
+						main_checkpoint_waiting("waiting");
+#endif
 				}
 				main_globals.ticks_until_next_save_check = 10;
 			}
@@ -1967,6 +2050,10 @@ static void main_save_map_private(
 
 		if (save_map)
 		{
+#ifdef HALO_LINUX
+			if (save_map_safely && checkpoint_wait_checks >= 300 && checkpoint_log_lines++ < CHECKPOINT_LOG_LINES)
+				platform_log("checkpoint: safe after %ld frames", checkpoint_wait_checks);
+#endif
 			hud_autosave(TRUE);
 			main_globals.save_map_completed = TRUE;
 			main_globals.saving_map = FALSE;
@@ -2281,6 +2368,27 @@ static boolean main_tick_catch_up(
 	return catch_up != 0;
 }
 
+/* (port) HALO_NET_CATCH_UP_TICKS: the most ticks a frame of a distributed
+network game runs to catch up with real time (main_update_time_unthrottled);
+2 by default, as a local game; 30 the Xbox's network game */
+static long main_network_catch_up_ticks(
+	void)
+{
+	extern char *getenv(const char *name);
+	extern int atoi(const char *text);
+	static long ticks = -1;
+
+	if (ticks < 0)
+	{
+		const char *setting = getenv("HALO_NET_CATCH_UP_TICKS");
+
+		ticks = setting && atoi(setting) > 0 ? atoi(setting) : 2;
+		if (ticks > TICKS_PER_SECOND)
+			ticks = TICKS_PER_SECOND;
+	}
+	return ticks;
+}
+
 static void main_update_time_unthrottled(
 	void)
 {
@@ -2305,7 +2413,15 @@ static void main_update_time_unthrottled(
 	else
 	{
 		seconds_elapsed = PIN(seconds_elapsed, 0.0f, 1.0f);
-		if (main_globals.connection == _game_connection_local)
+		/* (port) a split screen game - the Vita's solo multiplayer: a host
+		with its own client on one machine and no other - is paced as a
+		local game, at most two ticks a frame. As a network server it took
+		up to a second's ticks (30) a frame to catch up with real time; a
+		frame slowed by a heavy moment then ran more ticks, which made the
+		next frame slower still, until frames of 1.3-1.7 s (Blood Gulch on
+		the Vita). With no other machine there is nobody to keep up with. */
+		if (main_globals.connection == _game_connection_local ||
+			(main_globals.connection == _game_connection_network_server && network_game_is_splitscreen_local()))
 		{
 			if (debug_force_frame_rate_update)
 				seconds_elapsed = CEILING(seconds_elapsed, 0.03333333507180214f);
@@ -2324,6 +2440,27 @@ static void main_update_time_unthrottled(
 			{
 				seconds_elapsed = 0.03333333507180214f;
 			}
+		}
+		/* (port) a distributed network game - System Link and online play's
+		netcode (NETCODE.md) - the same: its machines tick on their own
+		clocks and nobody waits for anybody, but as a network server or
+		client each took up to a second's ticks (30) a frame to catch up
+		with real time, the spiral the split screen game had above. A host
+		whose tick nears a tick's 33 ms - the Vita's, with a client, whose
+		players it simulates and whose objects and corrections it sends
+		every tick - fell behind, ran more ticks the next frame, and slower
+		still: 1-5 fps for the host, and for its clients the host's players
+		and objects frozen, then jumping a second on (the host's ticks
+		and their updates came in bursts). Now at most two ticks a frame
+		(HALO_NET_CATCH_UP_TICKS): a machine that cannot keep up plays
+		slower than real time for a moment, as the campaign does; the
+		others take its updates as they come (each stamped with its tick).
+		The lockstep netcode keeps the Xbox's pacing (its clients must run
+		every tick the host ran). */
+		else if ((main_globals.connection == _game_connection_network_server ||
+			main_globals.connection == _game_connection_network_client) && network_game_distributed())
+		{
+			seconds_elapsed = CEILING(seconds_elapsed, (real)main_network_catch_up_ticks() * 0.03333333507180214f);
 		}
 	}
 	{
@@ -2676,6 +2813,41 @@ void main_rasterizer_throttle(
 			unsigned long long period = 1000000ull / (unsigned long long)cap;
 			unsigned long long now = vita_host_time_us();
 
+			/* (port) capped at the tick rate, a frame ends half a tick
+			after the last tick boundary, not a fixed period after the frame
+			before. The game runs as many ticks as whole ticks have passed
+			since the last frame (game_time_update's leftover): frames a
+			period apart sat wherever their phase drifted to, and near a
+			tick boundary the sleep's jitter (and anything else that moved a
+			frame by a millisecond) gave a frame no tick, so the same picture
+			twice, and the next two - the uneven motion of the weapon and
+			the view at a steady 30 a second. Half a tick away from either
+			boundary, each frame runs one. HALO_FRAME_PHASE_LOCK=0: the fixed
+			period again. */
+			{
+				extern real game_time_get_tick_fraction(void);
+				static int phase_lock = -1;
+
+				if (phase_lock < 0)
+				{
+					const char *setting = getenv("HALO_FRAME_PHASE_LOCK");
+
+					phase_lock = !setting || atol(setting) != 0;
+				}
+				/* (only for a frame that fit in the period: one that took
+				longer waited for nothing before, and would now wait up to
+				half a tick more whenever its end fell early in a tick - a
+				steady 40 ms frame ran at 24 a second instead of 25) */
+				if (phase_lock && cap == TICKS_PER_SECOND && previous_us && now - previous_us < period)
+				{
+					real fraction = game_time_get_tick_fraction();
+
+					/* (1: no game running, or paused; the test also keeps
+					the period within half a tick to a tick and a half) */
+					if (fraction >= 0.0f && fraction < 1.0f)
+						period = (unsigned long long)((1.5f - fraction) * (1000000.0f / TICKS_PER_SECOND));
+				}
+			}
 			if (previous_us && now - previous_us < period)
 			{
 				vita_host_sleep_us((unsigned long)(period - (now - previous_us)));
@@ -3365,17 +3537,33 @@ void main_game_render(
 commands run at the top of the main loop once the game time reaches each
 tick, for testing the save paths without a controller, e.g.
 "300:game_save_totally_unsafe;600:game_revert". Besides the console's
-own, @skip asks for a cinematic skip (as the controller does) and @quit
-does the pause menu's Save and Quit. Each runs once, at the first frame
-whose game time has reached its tick. */
+own, @skip asks for a cinematic skip (as the controller does), @quit
+does the pause menu's Save and Quit, and "@camera x y z yaw pitch" puts
+the debug camera there (degrees; yaw 0 looks along +x, pitch up is
+positive), through d:\\camera.txt and debug_camera_load ("@pan x y z yaw
+pitch yaw_rate pitch_rate": from then on turned by the rates, in degrees a
+tick, every frame), "@tv name" puts every player's unit at the centre of
+that scenario trigger volume (the benchmarks walk the player through a
+level's encounters this way: triage/perf2-status.md), and "@shot name"
+has the next frame presented saved as name.bmp in HALO_SCREENSHOT_DIR
+(the desktop GL device). Each runs once,
+at the first frame whose game time has reached its tick. */
 void game_state_save_to_persistent_storage(void);
 void platform_log(const char *format, ...);
+/* (@shot: the name of the next frame's screenshot, read by the present) */
+char halo_screenshot_name[64];
+
+static void main_test_camera(char const *arguments);
+static void main_test_trigger_volume(char const *name);
 
 static void main_test_commands_update(
 	void)
 {
+	static boolean pan_active;
+	static float pan[7];
+	static long pan_start;
 	static int parsed = 0;
-	static struct { long tick; char command[120]; boolean done; } commands[16];
+	static struct { long tick; char command[120]; boolean done; } commands[64];
 	static short command_count;
 	short index;
 
@@ -3421,8 +3609,89 @@ static void main_test_commands_update(
 			game_state_save_to_persistent_storage();
 			main_goto_main_menu();
 		}
+		else if (!strncmp(commands[index].command, "@shot ", 6))
+			csstrncpy(halo_screenshot_name, commands[index].command + 6, sizeof(halo_screenshot_name) - 1);
+		else if (!strncmp(commands[index].command, "@pan ", 5))
+		{
+			pan_active = sscanf(commands[index].command + 5, "%f %f %f %f %f %f %f", &pan[0], &pan[1], &pan[2], &pan[3],
+				&pan[4], &pan[5], &pan[6]) == 7;
+			pan_start = game_time_get();
+		}
+		else if (!strncmp(commands[index].command, "@camera ", 8))
+			main_test_camera(commands[index].command + 8);
+		else if (!strncmp(commands[index].command, "@tv ", 4))
+			main_test_trigger_volume(commands[index].command + 4);
 		else
 			hs_compile_and_evaluate(commands[index].command);
+	}
+	if (pan_active)
+	{
+		/* (@pan: the camera turned by the yaw and pitch rates each tick) */
+		char line[120];
+		long ticks = game_time_get() - pan_start;
+
+		snprintf(line, sizeof(line), "%f %f %f %f %f", pan[0], pan[1], pan[2], pan[3] + pan[5] * ticks, pan[4] + pan[6] * ticks);
+		main_test_camera(line);
+	}
+}
+
+static void main_test_trigger_volume(
+	char const *name)
+{
+	struct scenario *scenario = global_scenario_get();
+	short index;
+
+	for (index = 0; index < scenario->trigger_volumes.count; index++)
+	{
+		struct scenario_trigger_volume *volume =
+			TAG_BLOCK_GET_ELEMENT(&scenario->trigger_volumes, index, struct scenario_trigger_volume);
+		real_point3d centre;
+		struct data_iterator iterator;
+		struct player_datum *player;
+
+		if (strcmp(volume->name, name))
+			continue;
+		if (volume->type == _scenario_trigger_volume_type_axis_aligned)
+		{
+			centre.x = (volume->bounds.x0 + volume->bounds.x1) / 2.0f;
+			centre.y = (volume->bounds.y0 + volume->bounds.y1) / 2.0f;
+			centre.z = (volume->bounds.z0 + volume->bounds.z1) / 2.0f;
+		}
+		else
+		{
+			real_matrix4x3 matrix;
+			real_point3d middle = { volume->extents.i / 2.0f, volume->extents.j / 2.0f, volume->extents.k / 2.0f };
+
+			matrix4x3_from_point_and_vectors(&matrix, &volume->position, &volume->forward, &volume->up);
+			matrix4x3_transform_point(&matrix, &middle, &centre);
+		}
+		platform_log("test command: %s at %.2f %.2f %.2f", name, centre.x, centre.y, centre.z);
+		data_iterator_new(&iterator, player_data);
+		while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+			if (player->unit_index != NONE)
+				object_set_position(player->unit_index, &centre, NULL, NULL);
+		return;
+	}
+	platform_log("test command: no trigger volume %s", name);
+}
+
+static void main_test_camera(
+	char const *arguments)
+{
+	float x, y, z, yaw, pitch;
+	FILE *file;
+
+	if (sscanf(arguments, "%f %f %f %f %f", &x, &y, &z, &yaw, &pitch) == 5 &&
+		(file = fopen("d:\\camera.txt", "w")) != NULL)
+	{
+		real yaw_radians = DEGREES_TO_RADIANS(yaw), pitch_radians = DEGREES_TO_RADIANS(pitch);
+
+		fprintf(file, "%f %f %f\n%f %f %f\n%f %f %f\n%f\n", x, y, z,
+			cosine(yaw_radians) * cosine(pitch_radians), sine(yaw_radians) * cosine(pitch_radians), sine(pitch_radians),
+			-cosine(yaw_radians) * sine(pitch_radians), -sine(yaw_radians) * sine(pitch_radians), cosine(pitch_radians),
+			DEGREES_TO_RADIANS(70.0f));
+		fclose(file);
+		director_load_camera();
 	}
 }
 #endif
@@ -3538,6 +3807,11 @@ void main_loop(
 #endif
 #ifdef HALO_LINUX
 		main_test_commands_update();
+		{
+			void halo_shader_tour_update(void);
+
+			halo_shader_tour_update();
+		}
 #endif
 		if (!game_in_editor())
 		{

@@ -94,6 +94,8 @@ struct interpolated_camera
 struct interpolated_first_person
 {
 	long tick;
+	/* the ticks between the previous pose and the latest */
+	long span;
 	short node_count;
 	boolean has_previous;
 	real_matrix4x3 previous[MAXIMUM_INTERPOLATED_NODES];
@@ -109,6 +111,16 @@ static long interpolation_tick;
 static long interpolation_frame;
 static boolean interpolation_rendering;
 static real interpolation_fraction = 1.0f;
+/* the first-person weapon's blend: with every frame interpolated, the same
+tick and fraction; with only the weapon (HALO_INTERPOLATE_FIRST_PERSON),
+the ticks the render has drawn and the fraction past them, both read on
+the render's side (the running tick changes interpolation_tick and the
+clock's leftover while the frame is drawn) */
+static boolean first_person_rendering;
+static long first_person_tick;
+static real first_person_fraction = 1.0f;
+
+short game_time_get_elapsed(void);
 
 static real_matrix4x3 *tick_pose_node_matrices(long object_index);
 static void tick_pose_frame_begin(void);
@@ -366,17 +378,55 @@ void render_interpolation_tick(void)
 
 /* ---------- frames */
 
+/* HALO_INTERPOLATE_FIRST_PERSON=1: without interpolation, the first-person
+weapon and hands alone are blended between the last two ticks drawn. The
+Vita draws a frame only when a tick has run, 20-30 a second, so a frame
+moves the weapon's animation on by one tick or by two, unevenly - "on
+twos" (#13). The blend costs a few microseconds a frame (a matrix inverse,
+two products and a quaternion blend per node); the weapon's animation is
+drawn up to a tick behind, the camera and the world are not. */
+int halo_first_person_interpolation_enabled(void)
+{
+	static int enabled = -1;
+	static unsigned long settings_seen;
+	extern volatile unsigned long halo_settings_generation;
+
+	/* (read again when the settings panel changes something) */
+	if (enabled < 0 || settings_seen != halo_settings_generation)
+	{
+		const char *setting = getenv("HALO_INTERPOLATE_FIRST_PERSON");
+
+		settings_seen = halo_settings_generation;
+		enabled = setting && atoi(setting) != 0;
+	}
+	return enabled;
+}
+
 void render_interpolation_frame_begin(void)
 {
 	interpolation_rendering = halo_interpolation_enabled();
 	interpolation_frame++;
 	interpolation_fraction = game_time_get_tick_fraction();
+	first_person_rendering = interpolation_rendering || halo_first_person_interpolation_enabled();
+	if (interpolation_rendering)
+	{
+		first_person_tick = interpolation_tick;
+		first_person_fraction = interpolation_fraction;
+	}
+	else if (first_person_rendering)
+	{
+		short elapsed = game_time_get_elapsed();
+
+		first_person_tick += elapsed > 0 ? elapsed : 0;
+		first_person_fraction = halo_render_tick_fraction_get();
+	}
 	tick_pose_frame_begin();
 }
 
 void render_interpolation_frame_end(void)
 {
 	interpolation_rendering = FALSE;
+	first_person_rendering = FALSE;
 	tick_pose_frame_end();
 }
 
@@ -563,7 +613,9 @@ void render_interpolation_first_person(
 	real_matrix4x3 inverse_camera;
 	short node_index;
 
-	if (!interpolation_rendering ||
+	real t;
+
+	if (!first_person_rendering ||
 		local_player_index < 0 || local_player_index >= MAXIMUM_LOCAL_PLAYERS ||
 		node_count <= 0 || node_count > MAXIMUM_INTERPOLATED_NODES)
 	{
@@ -572,18 +624,25 @@ void render_interpolation_first_person(
 	first_person = &interpolated_first_person[local_player_index];
 	matrix4x3_from_point_and_vectors(&camera_matrix, &camera->position, &camera->forward, &camera->up);
 	matrix4x3_inverse(&camera_matrix, &inverse_camera);
-	if (first_person->tick != interpolation_tick)
+	if (first_person->tick != first_person_tick)
 	{
-		/* the pose drawn last, at the end of the previous tick */
-		first_person->has_previous = first_person->node_count == node_count;
+		/* the pose drawn last, at the end of the previous tick drawn (more
+		than one tick back when a frame ran several; a long gap - a pause,
+		a load - starts afresh) */
+		first_person->span = first_person_tick - first_person->tick;
+		first_person->has_previous = first_person->node_count == node_count &&
+			first_person->span > 0 && first_person->span <= 4;
 		memcpy(first_person->previous, first_person->latest, sizeof(first_person->previous));
-		first_person->tick = interpolation_tick;
+		first_person->tick = first_person_tick;
 	}
 	for (node_index = 0; node_index < node_count; node_index++)
 		matrix4x3_multiply(&inverse_camera, &node_matrices[node_index], &first_person->latest[node_index]);
 	first_person->node_count = node_count;
 	if (!first_person->has_previous)
 		return;
+	/* the pose a tick before the clock: the previous pose is span ticks
+	behind the latest, the clock a fraction of a tick ahead of it */
+	t = ((real)(first_person->span - 1) + first_person_fraction) / (real)first_person->span;
 	for (node_index = 0; node_index < node_count; node_index++)
 	{
 		real_matrix4x3 blended;
@@ -591,7 +650,7 @@ void render_interpolation_first_person(
 		matrix_blend(
 			&first_person->previous[node_index],
 			&first_person->latest[node_index],
-			interpolation_fraction,
+			t,
 			&blended);
 		matrix4x3_multiply(&camera_matrix, &blended, &node_matrices[node_index]);
 	}
@@ -754,11 +813,28 @@ static boolean tick_cluster_list_room(long **array, long *capacity, long wanted)
 	return TRUE;
 }
 
+/* (object_lights.c) */
+extern struct cluster_partition light_cluster_partition;
+extern struct data_array *light_data;
+
+/* the array each list's datums are in */
+static struct data_array *tick_cluster_list_data(int which)
+{
+	return which == _tick_cluster_list_light ? light_data : object_header_data;
+}
+
 static void tick_cluster_lists_capture(struct tick_pose_buffer *buffer)
 {
+	/* (the lights too: an object that moves - the player with the
+	flashlight - takes its lights out of their clusters and back every tick
+	(objects.c object_connect_lights), and a render that missed the
+	flashlight in its walk (lights_preprocess_scene) drew the frame without
+	it: on the Vita the flashlight's pool and what it lit went black on some
+	frames) */
 	static struct cluster_partition *const partitions[_tick_cluster_list_count] = {
 		&collideable_object_cluster_partition,
 		&noncollideable_object_cluster_partition,
+		&light_cluster_partition,
 	};
 	struct structure_bsp *structure_bsp = global_structure_bsp_get();
 	short cluster_count = structure_bsp ? (short)structure_bsp->clusters.count : 0;
@@ -826,9 +902,10 @@ long render_tick_cluster_list_next(int which, long *iterator)
 			break;
 		}
 		(*iterator)++;
-		/* (an object a script or cheat deleted on this thread since,
-		between the frames, whose slot may hold another) */
-		if (object_header_try_and_get(datum_index))
+		/* (a datum deleted on this thread since, between the frames - an
+		object a script or cheat deleted, a light's transition that ended
+		(lights_preprocess_scene) - whose slot may hold another) */
+		if (datum_try_and_get(tick_cluster_list_data(which), datum_index))
 			return datum_index;
 	}
 	return NONE;
@@ -840,6 +917,139 @@ long render_tick_cluster_list_first(int which, long *iterator, short cluster_ind
 
 	*iterator = cluster_index >= 0 && cluster_index < list->cluster_count ? list->first[cluster_index] : NONE;
 	return render_tick_cluster_list_next(which, iterator);
+}
+
+/* The other direction: the clusters an object is in, as the tick left it.
+An object's dynamic lights are searched in its clusters (object_lights.c
+lights_prepare_for_object_dynamic), and the live walk of its cluster
+references (object_get_first_cluster) finds none while the running tick has
+it out of the map to move it: that frame the object was drawn without the
+flashlight or any other point light, the next with it. Made on the render
+thread, once per published capture, from the two object lists above. */
+static struct
+{
+	unsigned long capture;
+	int buffer;
+	/* by absolute object index: the datum index then, its clusters from
+	first[] on, count[] of them */
+	long owner[MAXIMUM_OBJECTS_PER_MAP];
+	long first[MAXIMUM_OBJECTS_PER_MAP];
+	short count[MAXIMUM_OBJECTS_PER_MAP];
+	short *clusters;
+	long cluster_capacity;
+	boolean valid;
+} tick_object_clusters = { 0, -1 };
+
+static void tick_object_clusters_build(struct tick_pose_buffer *buffer)
+{
+	long total = 0, used = 0;
+	int which;
+	long index;
+
+	tick_object_clusters.valid = FALSE;
+	for (index = 0; index < MAXIMUM_OBJECTS_PER_MAP; index++)
+	{
+		tick_object_clusters.owner[index] = NONE;
+		tick_object_clusters.count[index] = 0;
+	}
+	for (which = _tick_cluster_list_collideable; which <= _tick_cluster_list_noncollideable; which++)
+	{
+		struct tick_cluster_list *list = &buffer->cluster_lists[which];
+		short cluster_index;
+
+		if (!list->valid)
+			return;
+		for (cluster_index = 0; cluster_index < list->cluster_count; cluster_index++)
+		{
+			long entry;
+
+			for (entry = list->first[cluster_index]; list->datums[entry] != NONE; entry++)
+			{
+				long absolute_index = DATUM_INDEX_TO_ABSOLUTE_INDEX(list->datums[entry]);
+
+				if (absolute_index >= 0 && absolute_index < MAXIMUM_OBJECTS_PER_MAP)
+				{
+					tick_object_clusters.owner[absolute_index] = list->datums[entry];
+					tick_object_clusters.count[absolute_index]++;
+					total++;
+				}
+			}
+		}
+	}
+	if (total > tick_object_clusters.cluster_capacity)
+	{
+		long capacity = total * 2 > 4096 ? total * 2 : 4096;
+		/* (the C library's realloc: see render_tick_poses_capture) */
+		short *larger = (realloc)(tick_object_clusters.clusters, capacity * sizeof(short));
+
+		if (!larger)
+			return;
+		tick_object_clusters.clusters = larger;
+		tick_object_clusters.cluster_capacity = capacity;
+	}
+	for (index = 0; index < MAXIMUM_OBJECTS_PER_MAP; index++)
+	{
+		tick_object_clusters.first[index] = used;
+		used += tick_object_clusters.count[index];
+		tick_object_clusters.count[index] = 0;
+	}
+	for (which = _tick_cluster_list_collideable; which <= _tick_cluster_list_noncollideable; which++)
+	{
+		struct tick_cluster_list *list = &buffer->cluster_lists[which];
+		short cluster_index;
+
+		for (cluster_index = 0; cluster_index < list->cluster_count; cluster_index++)
+		{
+			long entry;
+
+			for (entry = list->first[cluster_index]; list->datums[entry] != NONE; entry++)
+			{
+				long absolute_index = DATUM_INDEX_TO_ABSOLUTE_INDEX(list->datums[entry]);
+
+				if (absolute_index >= 0 && absolute_index < MAXIMUM_OBJECTS_PER_MAP &&
+					tick_object_clusters.owner[absolute_index] == list->datums[entry])
+				{
+					tick_object_clusters.clusters[tick_object_clusters.first[absolute_index] +
+						tick_object_clusters.count[absolute_index]++] = cluster_index;
+				}
+			}
+		}
+	}
+	tick_object_clusters.valid = TRUE;
+}
+
+/* the render: the clusters the object (its ultimate parent, as
+object_get_first_cluster) was in when the tick drawn was captured; FALSE
+when the frame does not use the captured lists or the object was not in
+them (created since): the caller walks the live references then */
+boolean render_tick_object_clusters(long object_index, short const **clusters, short *count)
+{
+	struct tick_pose_buffer *buffer;
+	long absolute_index;
+
+	if (!render_tick_cluster_lists_active(_tick_cluster_list_collideable) ||
+		!render_tick_cluster_lists_active(_tick_cluster_list_noncollideable))
+	{
+		return FALSE;
+	}
+	buffer = &tick_pose_buffers[tick_pose_published];
+	if (tick_object_clusters.buffer != tick_pose_published || tick_object_clusters.capture != buffer->capture)
+	{
+		tick_object_clusters.buffer = tick_pose_published;
+		tick_object_clusters.capture = buffer->capture;
+		tick_object_clusters_build(buffer);
+	}
+	if (!tick_object_clusters.valid)
+		return FALSE;
+	absolute_index = DATUM_INDEX_TO_ABSOLUTE_INDEX(object_index);
+	if (absolute_index < 0 || absolute_index >= MAXIMUM_OBJECTS_PER_MAP ||
+		tick_object_clusters.owner[absolute_index] != object_index)
+	{
+		return FALSE;
+	}
+	*clusters = tick_object_clusters.clusters + tick_object_clusters.first[absolute_index];
+	*count = tick_object_clusters.count[absolute_index];
+	return TRUE;
 }
 
 /* the tick thread, after game_time_update: the objects as the tick left
