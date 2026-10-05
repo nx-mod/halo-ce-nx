@@ -240,6 +240,14 @@ float strtof(const char *text, char **end)
 	return (float)strtod(text, end);
 }
 
+/* tick_thread.c's core pinning (HALO_TICK_CORE, default 2) */
+extern void host_pin_current_thread(int core);
+
+void vita_host_pin_current_thread(int core)
+{
+	host_pin_current_thread(core);
+}
+
 /* main.c's frame cap without interpolation (a frame per 30 Hz tick, not the
 same picture again), which it only applies when this exists */
 void vita_host_sleep_us(unsigned long microseconds)

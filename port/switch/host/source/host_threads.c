@@ -221,3 +221,17 @@ long host_event_wait(long handle, long long timeout_ns)
 	rc = waitSingle(waiterForUEvent(&s_events[handle - 1]), (u64)timeout_ns);
 	return R_FAILED(rc) ? 1 : 0;
 }
+
+extern void logf_both(const char *fmt, ...);
+
+/* the calling thread onto one core (the guest's vita_host_pin_current_thread:
+tick_thread.c puts the game tick on core 2, which nothing else uses) */
+void host_pin_current_thread(int core)
+{
+	Result rc;
+
+	if (core < 0 || core > 2)
+		return;
+	rc = svcSetThreadCoreMask(CUR_THREAD_HANDLE, core, 1u << core);
+	logf_both("host_pin_current_thread: core %d%s\n", core, R_FAILED(rc) ? " (refused)" : "");
+}

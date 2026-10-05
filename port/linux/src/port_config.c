@@ -262,6 +262,11 @@ static const struct config_setting config_settings[] =
 	{ "debug.sample_seconds", _config_real, "0.0", "HALO_SAMPLE", _environment_value, _platform_android,
 		"Log where every game thread is this often, in seconds (read by the\n"
 		"app, port/android/host/host_debug.c); 0 never." },
+	{ "debug.environment", _config_string, "\"\"", "HALO_ENVIRONMENT", _environment_value, _platform_switch,
+		"HALO_* switches for testing, set before the game starts, separated by\n"
+		"spaces: \"HALO_FRAME_TIMING=300\" logs where each frame's time goes,\n"
+		"\"HALO_RENDER_PROFILE=1\" the render's phases, \"HALO_TICK_THREAD=1\" runs\n"
+		"the game tick on its own core (experimental)." },
 	{ "debug.memory_watch_shift", _config_integer, "1", "HALO_MEMORY_WATCH_SHIFT", _environment_value,
 		_platform_switch,
 		"How often unchanged game memory is checked for changes the GPU's copy\n"

@@ -84,6 +84,28 @@ void __guest_entry(void)
 	off: with it the render thread crashed at the main menu in
 	d3d8_gl.c's state_attribute_pointer, reading renderer state the tick
 	changed under it */
+	/* config.toml's debug.environment: the HALO_* switches the other ports
+	read from the environment, which a Switch app has none of */
+	{
+		extern const char *config_string(const char *name);
+		extern int setenv(const char *name, const char *value, int overwrite);
+		const char *environment = config_string("debug.environment");
+		char buffer[512];
+		char *item, *save = NULL;
+
+		snprintf(buffer, sizeof(buffer), "%s", environment ? environment : "");
+		for (item = strtok_r(buffer, " ,", &save); item; item = strtok_r(NULL, " ,", &save))
+		{
+			char *equals = strchr(item, '=');
+
+			if (!equals)
+				continue;
+			*equals = 0;
+			setenv(item, equals + 1, 1);
+			printf("debug.environment: %s=%s\n", item, equals + 1);
+		}
+		fflush(stdout);
+	}
 	host_log("calling the game's real main() now");
 	extern int main(void);
 	main();

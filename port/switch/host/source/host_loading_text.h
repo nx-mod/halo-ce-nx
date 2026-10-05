@@ -19,6 +19,9 @@ extern int g_host_overlay_flags;
 /* host_video.c: config.toml's display and overlay settings and
 debug.gl_debug, from the guest before it opens the window */
 void host_video_configure(int frame_rate, int vsync, int overlay_flags, int gl_debug);
+
+/* host_threads.c */
+void host_pin_current_thread(int core);
 void host_loading_text_console(void); /* clears the console */
 
 #endif
