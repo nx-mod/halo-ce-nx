@@ -4,58 +4,17 @@
 #include <GLES2/gl2ext.h>
 #include <string.h>
 
-/* glShaderSource's generated guest wrapper (tools/android_gl_stubs.py)
-widens each string pointer into a fixed array of 64-bit slots instead
-of passing a real const char *const * - the real glShaderSource can't
-take that directly, so this unwraps it back into one. */
-void hostgl_glShaderSource(GLuint shader, GLsizei count, const unsigned long long *strings,
-	const GLint *lengths)
-{
-	const char *pointers[16];
-	GLsizei index;
-
-	if (count > 16)
-		count = 16;
-	for (index = 0; index < count; index++)
-		pointers[index] = (const char *)(unsigned long)strings[index];
-	glShaderSource(shader, count, pointers, lengths);
-}
-
-/* shader compiles and links, timed: one taking milliseconds in the
-middle of a frame is a hitch (a new effect's first appearance) */
-#include <switch.h>
-extern void logf_both(const char *fmt, ...);
-static double s_compile_ms_total;
-static unsigned s_compile_count, s_compile_logged;
-static void compile_time(const char *what, u64 start)
-{
-	double ms = (double)armTicksToNs(armGetSystemTick() - start) / 1000000.0;
-
-	s_compile_ms_total += ms;
-	s_compile_count++;
-	if (ms >= 2.0 && s_compile_logged < 60)
-	{
-		s_compile_logged++;
-		logf_both("GL %s took %.1f ms (%u compiles/links so far, %.0f ms in all)\n", what, ms,
-			s_compile_count, s_compile_ms_total);
-	}
-}
-
-void hostgl_glCompileShader(GLuint shader)
-{
-	u64 start = armGetSystemTick();
-
-	glCompileShader(shader);
-	compile_time("glCompileShader", start);
-}
-
-void hostgl_glLinkProgram(GLuint program)
-{
-	u64 start = armGetSystemTick();
-
-	glLinkProgram(program);
-	compile_time("glLinkProgram", start);
-}
+/* hand-written in host_shader_cache.c: the shader program cache on the
+SD card (deferred compiles, binaries loaded instead of linked) and
+glShaderSource's unwrapping of the guest's widened string pointers */
+extern char hostgl_glShaderSource[];
+extern char hostgl_glCompileShader[];
+extern char hostgl_glGetShaderiv[];
+extern char hostgl_glGetShaderInfoLog[];
+extern char hostgl_glCreateProgram[];
+extern char hostgl_glAttachShader[];
+extern char hostgl_glBindAttribLocation[];
+extern char hostgl_glLinkProgram[];
 
 static const struct { const char *name; void *function; } kHostGlFunctions[] = {
 	{"hostgl_glGetIntegerv", (void *)glGetIntegerv},
@@ -136,12 +95,12 @@ static const struct { const char *name; void *function; } kHostGlFunctions[] = {
 	{"hostgl_glCreateShader", (void *)glCreateShader},
 	{"hostgl_glShaderSource", (void *)hostgl_glShaderSource},
 	{"hostgl_glCompileShader", (void *)hostgl_glCompileShader},
-	{"hostgl_glGetShaderiv", (void *)glGetShaderiv},
-	{"hostgl_glGetShaderInfoLog", (void *)glGetShaderInfoLog},
+	{"hostgl_glGetShaderiv", (void *)hostgl_glGetShaderiv},
+	{"hostgl_glGetShaderInfoLog", (void *)hostgl_glGetShaderInfoLog},
 	{"hostgl_glDeleteShader", (void *)glDeleteShader},
-	{"hostgl_glCreateProgram", (void *)glCreateProgram},
-	{"hostgl_glAttachShader", (void *)glAttachShader},
-	{"hostgl_glBindAttribLocation", (void *)glBindAttribLocation},
+	{"hostgl_glCreateProgram", (void *)hostgl_glCreateProgram},
+	{"hostgl_glAttachShader", (void *)hostgl_glAttachShader},
+	{"hostgl_glBindAttribLocation", (void *)hostgl_glBindAttribLocation},
 	{"hostgl_glLinkProgram", (void *)hostgl_glLinkProgram},
 	{"hostgl_glGetProgramiv", (void *)glGetProgramiv},
 	{"hostgl_glGetProgramInfoLog", (void *)glGetProgramInfoLog},

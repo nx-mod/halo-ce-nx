@@ -13,6 +13,12 @@ Usage: switch_gl_resolve.py gl_imports.list output.c
 import sys
 
 
+CACHE_FUNCTIONS = (
+    "hostgl_glShaderSource", "hostgl_glCompileShader", "hostgl_glGetShaderiv", "hostgl_glGetShaderInfoLog",
+    "hostgl_glCreateProgram", "hostgl_glAttachShader", "hostgl_glBindAttribLocation", "hostgl_glLinkProgram",
+)
+
+
 def main():
     imports_list, output = sys.argv[1:3]
     names = [line.split("#", 1)[0].strip() for line in open(imports_list, encoding="utf-8")]
@@ -24,63 +30,15 @@ def main():
         "#include <GLES2/gl2ext.h>",
         "#include <string.h>",
         "",
-        "/* glShaderSource's generated guest wrapper (tools/android_gl_stubs.py)",
-        "widens each string pointer into a fixed array of 64-bit slots instead",
-        "of passing a real const char *const * - the real glShaderSource can't",
-        "take that directly, so this unwraps it back into one. */",
-        "void hostgl_glShaderSource(GLuint shader, GLsizei count, const unsigned long long *strings,",
-        "\tconst GLint *lengths)",
-        "{",
-        "\tconst char *pointers[16];",
-        "\tGLsizei index;",
-        "",
-        "\tif (count > 16)",
-        "\t\tcount = 16;",
-        "\tfor (index = 0; index < count; index++)",
-        "\t\tpointers[index] = (const char *)(unsigned long)strings[index];",
-        "\tglShaderSource(shader, count, pointers, lengths);",
-        "}",
-        "",
-        "/* shader compiles and links, timed: one taking milliseconds in the",
-        "middle of a frame is a hitch (a new effect's first appearance) */",
-        "#include <switch.h>",
-        "extern void logf_both(const char *fmt, ...);",
-        "static double s_compile_ms_total;",
-        "static unsigned s_compile_count, s_compile_logged;",
-        "static void compile_time(const char *what, u64 start)",
-        "{",
-        "\tdouble ms = (double)armTicksToNs(armGetSystemTick() - start) / 1000000.0;",
-        "",
-        "\ts_compile_ms_total += ms;",
-        "\ts_compile_count++;",
-        "\tif (ms >= 2.0 && s_compile_logged < 60)",
-        "\t{",
-        "\t\ts_compile_logged++;",
-        "\t\tlogf_both(\"GL %s took %.1f ms (%u compiles/links so far, %.0f ms in all)\\n\", what, ms,",
-        "\t\t\ts_compile_count, s_compile_ms_total);",
-        "\t}",
-        "}",
-        "",
-        "void hostgl_glCompileShader(GLuint shader)",
-        "{",
-        "\tu64 start = armGetSystemTick();",
-        "",
-        "\tglCompileShader(shader);",
-        "\tcompile_time(\"glCompileShader\", start);",
-        "}",
-        "",
-        "void hostgl_glLinkProgram(GLuint program)",
-        "{",
-        "\tu64 start = armGetSystemTick();",
-        "",
-        "\tglLinkProgram(program);",
-        "\tcompile_time(\"glLinkProgram\", start);",
-        "}",
+        "/* hand-written in host_shader_cache.c: the shader program cache on the",
+        "SD card (deferred compiles, binaries loaded instead of linked) and",
+        "glShaderSource's unwrapping of the guest's widened string pointers */",
+        *[f"extern char {n}[];" for n in CACHE_FUNCTIONS],
         "",
         "static const struct { const char *name; void *function; } kHostGlFunctions[] = {",
     ]
     for name in names:
-        if name in ("hostgl_glShaderSource", "hostgl_glCompileShader", "hostgl_glLinkProgram"):
+        if name in CACHE_FUNCTIONS:
             out.append(f'\t{{"{name}", (void *){name}}},')
             continue
         real = name[len("hostgl_"):]

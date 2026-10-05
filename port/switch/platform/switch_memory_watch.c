@@ -13,10 +13,10 @@ second at the main menu.
 
 Instead each page's contents are hashed, and its generation moves only
 when the hash does. A page is hashed at most once a frame, and less
-often while it keeps not changing (every 1, 2, 4 frames): vertex
+often while it keeps not changing (every 1 or 2 frames): vertex
 data the game rewrites each frame stays checked every frame, static
 textures cost almost nothing, and a game write to a page that had been
-static is still seen within 4 frames. Writes the host makes (file reads
+static is still seen within 2 frames. Writes the host makes (file reads
 into guest memory, xbox_files.c) force a recheck at once, as on the Vita
 - which, unlike this, never sees writes made by game code.
 */
@@ -25,9 +25,9 @@ into guest memory, xbox_files.c) force a recheck at once, as on the Vita
 
 #define WATCH_PAGE_SIZE 0x1000UL
 #define WATCH_PAGE_COUNT (PLATFORM_CONTIGUOUS_SIZE / WATCH_PAGE_SIZE)
-/* 4 frames: at 32 (about a second at 30 fps) text whose glyphs loaded
+/* 2 frames: at 32 (about a second at 30 fps) text whose glyphs loaded
 into a page that had backed off showed garbled for that long */
-#define WATCH_MAXIMUM_INTERVAL_SHIFT 2
+#define WATCH_MAXIMUM_INTERVAL_SHIFT 1
 
 static unsigned long page_generation[WATCH_PAGE_COUNT];
 static unsigned long long page_hash[WATCH_PAGE_COUNT];
