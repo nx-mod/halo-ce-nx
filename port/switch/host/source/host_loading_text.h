@@ -22,6 +22,9 @@ void host_video_configure(int frame_rate, int vsync, int overlay_flags, int gl_d
 
 /* host_threads.c */
 void host_pin_current_thread(int core);
+
+/* host_mjx.c: a .mjx movie picture's decode, for the guest's mjx.c */
+long host_mjx_decode(unsigned int jpeg_address, unsigned int length, unsigned int layout_address);
 void host_loading_text_console(void); /* clears the console */
 
 #endif

@@ -96,7 +96,10 @@ SWITCH_GAME_FLAGS = [f for f in GAME_FLAGS if f != "-Wno-error=incompatible-func
 # either SDL-tied (wrong for Switch - see PORTING.md's platform-layer
 # plan) or needs a real host_* import that doesn't exist yet.
 SWITCH_PLATFORM_FILES = [
-    "halo_linker_common.c", "msvc_crt.c", "msvc_wide.c", "bink_null.c",
+    "halo_linker_common.c", "msvc_crt.c", "msvc_wide.c",
+    # movies (docs/mjx_movies.md): the Bink calls answered from .mjx files,
+    # whose pictures the host decodes (host_mjx.c - libjpeg is 64-bit only)
+    "bink_mjx.c", "mjx.c",
     "tag_relocate.c", "frame_timing.c",
     # the Win32-file-API-over-POSIX layer (CreateFileA/ReadFile/...,
     # platform_translate_path, platform_data_root/save_root) - no SDL,
