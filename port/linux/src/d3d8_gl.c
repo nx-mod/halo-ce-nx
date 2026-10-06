@@ -135,6 +135,40 @@ long halo_screen_width(void)
 	return screen_width;
 }
 
+/* display.shadow_resolution: the size the shadow maps are drawn at. Ported
+from halo-ce-universal (based on Tyberious's #47).
+
+Each object's shadow is drawn from above into a 128x128 map, blurred into
+another and projected onto the level under it (rasterizer_xbox_shadows.c).
+On a large screen a shadow's 128 texels show as steps along its edge, which
+crawl as the object moves. The two maps, the game's only R5G6B5 render
+targets, are drawn larger as the screen's targets are (render_target_get):
+the game's viewports, clears and quads, in its 128 units, scale with them,
+and the blur widens to match (rasterizer_shadow_convolve). A power of two up
+to 8 (1024x1024); 1 draws them as the Xbox did. Other ports keep 1. */
+#define SHADOW_MAP_SIZE 128
+#define SHADOW_MAP_MAXIMUM_SCALE 8
+
+long halo_shadow_map_scale(void)
+{
+	static long scale;
+
+	if (!scale)
+	{
+#ifdef HALO_SWITCH
+		long resolution = config_integer("display.shadow_resolution");
+#else
+		long resolution = SHADOW_MAP_SIZE;
+#endif
+
+		scale = 1;
+		while (scale < SHADOW_MAP_MAXIMUM_SCALE && SHADOW_MAP_SIZE * scale * 2 <= resolution)
+			scale *= 2;
+		platform_log("shadow maps: %ldx%ld", SHADOW_MAP_SIZE * scale, SHADOW_MAP_SIZE * scale);
+	}
+	return scale;
+}
+
 void halo_screen_ui_offset(unsigned char centered)
 {
 	ui_offset = centered ? (halo_screen_width() - 640) / 2 : 0;
@@ -761,6 +795,16 @@ static void surface_dimensions(const D3DSurface *surface, unsigned long *width, 
 		format == D3DFMT_LIN_D24S8 || format == D3DFMT_LIN_F24S8 || format == D3DFMT_LIN_D16 || format == D3DFMT_LIN_F16;
 }
 
+/* the shadow maps: the game's only R5G6B5 render targets, 128x128 */
+static BOOL surface_is_shadow_map(const D3DSurface *surface)
+{
+	struct xgpu_texture_description description;
+
+	xgpu_texture_describe(surface->Format, surface->Size, &description);
+	return description.format == D3DFMT_R5G6B5 && description.width == SHADOW_MAP_SIZE &&
+		description.height == SHADOW_MAP_SIZE;
+}
+
 static struct render_target_entry *render_target_get(const D3DSurface *surface)
 {
 	struct render_target_entry *entry;
@@ -777,6 +821,12 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 	{
 		scale[0] = screen_scale[0];
 		scale[1] = screen_scale[1];
+	}
+	/* ... and the shadow maps at display.shadow_resolution's */
+	else if (!depth && surface_is_shadow_map(surface))
+	{
+		scale[0] = (float)halo_shadow_map_scale();
+		scale[1] = scale[0];
 	}
 	for (entry = *render_target_bucket(surface->Data); entry; entry = entry->next_in_bucket)
 	{

@@ -108,6 +108,7 @@ in `debug.txt` with the default used instead. Delete the file to start over.
 | `display.fxaa` | `true` | smooths jagged edges (about 1 ms of GPU time) |
 | `display.sharpen` | `0.4` | contrast-adaptive sharpening, `0.0` to `1.0` |
 | `display.anisotropy` | `4` | texture sharpness at a slant: `1` (original), `2`, `4`, `8`, `16` |
+| `display.shadow_resolution` | `256` | the size objects' shadows are drawn at: `128` (the Xbox's, with stepped edges that crawl), `256`, `512`, `1024` |
 | `display.lens_flares` | `true` | lens flares and the glow around lights |
 | `display.lens_flare_test_every` | `2` | test each light's visibility every Nth frame: `1` is the original, higher is cheaper |
 | `overlay.enabled` | `true` | the frame rate overlay |
@@ -134,7 +135,6 @@ frame of the last second, and shader programs linked / compiled fresh.
 - The picture can look a little darker than expected, and a model was seen
   to flash dark once; under investigation.
 - Some letters in menu text sometimes show a thin box around them.
-- Shadows look a little off.
 
 ## Credits
 

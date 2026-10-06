@@ -113,6 +113,11 @@ static const struct config_setting config_settings[] =
 		"Sharpen the picture, 0.0 (off) to 1.0, adapting to the contrast already\n"
 		"there so edges do not ring. Offsets FXAA's slight softening and the\n"
 		"game's 480-line layout drawn at 720p." },
+	{ "display.shadow_resolution", _config_integer, "256", "HALO_SHADOW_RESOLUTION", _environment_value,
+		_platform_switch,
+		"The size of the maps objects' shadows are drawn in: 128 (the Xbox's),\n"
+		"256, 512 or 1024. At 128 a shadow's edge shows steps that crawl as the\n"
+		"object moves; larger is smoother, with the blur widened to stay as soft." },
 	{ "display.lens_flares", _config_boolean, "true", "HALO_LENS_FLARES", _environment_value, _platform_switch,
 		"Lens flares and the glow around lights. Off saves the GPU tests that\n"
 		"decide whether each light is hidden, which in rooms full of lights are\n"
