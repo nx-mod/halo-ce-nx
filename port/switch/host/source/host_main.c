@@ -462,11 +462,10 @@ static int load_and_run_guest(const char *path)
 	return 0;
 }
 
-/* sdmc:/haloce-nx/ - game data (the xiso, the maps extracted from it),
-separate from sdmc:/switch/halo-ce-nx-guest-poc/'s app binaries/log:
-different lifecycle (gigabytes, user-supplied, survives a reinstall),
-different convention (not every homebrew app's own folder needs a
-multi-GB disc image sitting in it). */
+/* sdmc:/haloce-nx/ - the game data (the xiso, the maps extracted from it),
+and by default the app beside it too: host.nro and guest.elf, launched
+from there by a forwarder or the album's title takeover (find_app_directory
+looks wherever the NRO actually is). */
 #define GAME_DATA_DIR "sdmc:/haloce-nx"
 #define GAME_XISO_PATH GAME_DATA_DIR "/halo.xiso"
 
@@ -580,6 +579,31 @@ thread stacks and other mappings at random in the same region, so a stack
 could land inside the window before the guest was mapped there: then
 svcMapMemory (data) failed with 0xd401 and the run ended at the loading
 text. Reserved before anything is created, nothing else is put there. */
+/* the folder the NRO was launched from (argv[0]), where guest.elf and the
+logs are: sdmc:/haloce-nx/ beside the game data, or wherever it was put.
+A launch with no path (some forwarders) uses the game folder. */
+#define DEFAULT_APP_DIRECTORY "sdmc:/haloce-nx"
+static char s_app_directory[256] = DEFAULT_APP_DIRECTORY;
+
+static void find_app_directory(int argc, char *argv[])
+{
+	const char *slash;
+
+	if (argc < 1 || !argv[0] || strncmp(argv[0], "sdmc:/", 6) != 0)
+		return;
+	slash = strrchr(argv[0], '/');
+	if (!slash || (size_t)(slash - argv[0]) >= sizeof(s_app_directory))
+		return;
+	memcpy(s_app_directory, argv[0], (size_t)(slash - argv[0]));
+	s_app_directory[slash - argv[0]] = 0;
+}
+
+static const char *app_path(char *buffer, size_t size, const char *name)
+{
+	snprintf(buffer, size, "%s/%s", s_app_directory, name);
+	return buffer;
+}
+
 #define GUEST_WINDOW_BASE 0x40000000UL
 #define GUEST_WINDOW_SIZE 0x10000000UL
 
@@ -592,17 +616,20 @@ int main(int argc, char *argv[])
 
 	host_loading_text_console();
 	/* the previous run's log survives one relaunch */
-	remove("sdmc:/switch/halo-ce-nx-guest-poc/host.prev.log");
-	rename("sdmc:/switch/halo-ce-nx-guest-poc/host.log", "sdmc:/switch/halo-ce-nx-guest-poc/host.prev.log");
-	g_log = fopen("sdmc:/switch/halo-ce-nx-guest-poc/host.log", "w");
-	logf_both("halo-ce-nx guest-poc host starting\n");
+	char path[300], path2[300];
+
+	find_app_directory(argc, argv);
+	remove(app_path(path, sizeof(path), "host.prev.log"));
+	rename(app_path(path, sizeof(path), "host.log"), app_path(path2, sizeof(path2), "host.prev.log"));
+	g_log = fopen(app_path(path, sizeof(path), "host.log"), "w");
+	logf_both("halo-ce-nx host starting in %s\n", s_app_directory);
 
 	if (ensure_game_data_extracted())
 		host_loading_text_console(); /* the extraction screen replaced it */
 	start_heartbeat();
 
 	{
-		int guest_result = load_and_run_guest("sdmc:/switch/halo-ce-nx-guest-poc/guest.elf");
+		int guest_result = load_and_run_guest(app_path(path, sizeof(path), "guest.elf"));
 
 		/* the guest returned (or never started): failures belong on screen */
 		g_console_echo = 1;
@@ -615,7 +642,7 @@ int main(int argc, char *argv[])
 	if (g_log)
 		fclose(g_log);
 
-	printf("Done. See sdmc:/switch/halo-ce-nx-guest-poc/host.log\nPress + to exit.\n");
+	printf("Done. See %s\nPress + to exit.\n", app_path(path, sizeof(path), "host.log"));
 	consoleUpdate(NULL);
 
 	PadState pad;

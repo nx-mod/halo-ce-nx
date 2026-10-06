@@ -25,8 +25,9 @@ performance overlay running alongside, not from the game.*
 
 ## Installing
 
-1. Copy `host.nro` and `guest.elf` to `sdmc:/switch/halo-ce-nx-guest-poc/`.
-2. Put your game data in `sdmc:/haloce-nx/`: either the Xbox disc image
+1. Copy `host.nro` and `guest.elf` to `sdmc:/haloce-nx/`, the game's own
+   folder.
+2. Put your game data there too: either the Xbox disc image
    as `halo.xiso` (extracted to `maps/` on first launch, which takes a
    while) or an already-extracted `maps/` folder. Copy the disc's
    `default.xbe` there too; the loading screen's picture comes from it.
@@ -34,10 +35,15 @@ performance overlay running alongside, not from the game.*
    disc's `bink/*.bik` files with `tools/mjx_pack.py` and put the results
    in `sdmc:/haloce-nx/bink/` (see [Movies](#movies)). Without them the
    game skips its movies, as it always could.
-4. Launch it from the homebrew menu.
+4. Launch `sdmc:/haloce-nx/host.nro` with full memory: make a
+   [Sphaira](https://github.com/ITotalJustice/sphaira) forwarder for it (a
+   home-menu icon), or open it from a game's title takeover (hold R while
+   starting a game). Both run it as an application with the console's
+   full memory; the homebrew menu opened from the album runs as an applet,
+   with much less.
 
 Saves, the map cache, `config.toml`, the shader cache and `debug.txt` (the
-game's own log) go in `sdmc:/haloce-nx/`; `host.log` goes beside the NRO.
+game's own log) go in `sdmc:/haloce-nx/`, and `host.log` beside the NRO.
 Saves keep loading across updates: the game state sits at a fixed address
 (saves made before October 6, 2026 builds don't load in later ones).
 
