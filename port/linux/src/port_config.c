@@ -113,6 +113,10 @@ static const struct config_setting config_settings[] =
 		"Sharpen the picture, 0.0 (off) to 1.0, adapting to the contrast already\n"
 		"there so edges do not ring. Offsets FXAA's slight softening and the\n"
 		"game's 480-line layout drawn at 720p." },
+	{ "display.render_scale", _config_real, "1.0", "HALO_RENDER_SCALE", _environment_value, _platform_switch,
+		"The resolution the game draws at, as a share of 720p: 1.0 is 1280x720,\n"
+		"0.75 is 960x540, down to 0.5. Lower frees the GPU where it is the\n"
+		"limit (big battles), at some softness, which sharpening offsets." },
 	{ "display.shader_warmup", _config_boolean, "true", "HALO_SHADER_WARMUP", _environment_value, _platform_switch,
 		"At start, compile every shader program the game has used before on the\n"
 		"idle third core, into the shader cache, so meeting one in play is not a\n"

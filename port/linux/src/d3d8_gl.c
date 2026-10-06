@@ -121,6 +121,18 @@ static void screen_mode_choose(long *width, float scale[2])
 		if (*width != wanted && *width != (wanted & ~1L))
 			scale[0] = scale[1] = scale[0] < scale[1] ? scale[0] : scale[1];
 	}
+#if defined(HALO_SWITCH)
+	{
+		/* display.render_scale: fewer pixels for a GPU-bound frame; the
+		present stretches the back buffer to the display */
+		double render_scale = config_real("display.render_scale");
+
+		if (!(render_scale >= 0.5 && render_scale <= 1.0))
+			render_scale = 1.0;
+		scale[0] *= (float)render_scale;
+		scale[1] *= (float)render_scale;
+	}
+#endif
 #endif
 }
 

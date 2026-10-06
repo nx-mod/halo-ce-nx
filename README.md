@@ -109,6 +109,7 @@ in `debug.txt` with the default used instead. Delete the file to start over.
 | `display.vsync` | `true` | waits for the display; `false` presents at once (tearing), sleeping to the cap if there is one |
 | `display.fxaa` | `true` | smooths jagged edges (about 1 ms of GPU time) |
 | `display.sharpen` | `0.4` | contrast-adaptive sharpening, `0.0` to `1.0` |
+| `display.render_scale` | `1.0` | the resolution drawn, as a share of 720p: `0.75` is 960x540, down to `0.5`; lower helps where the GPU is the limit (big battles) |
 | `display.gamma` | `1.0` | brightness of the darker parts: above `1.0` brighter, below darker |
 | `display.shader_warmup` | `true` | compiles every shader the game has used before on the idle third core at start, so meeting one in play is not a stall |
 | `display.anisotropy` | `4` | texture sharpness at a slant: `1` (original), `2`, `4`, `8`, `16` |
