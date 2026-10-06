@@ -19,7 +19,10 @@ OpenGL ES.
   interpolated between the 30 Hz ticks.
 - **Vulkan underneath**: OpenGL ES through nxvk (Zink over NVK, Mesa 26),
   with a shader disk cache, so each shader compiles once, not every session.
-- **Movies**: the intro, attract and credits movies, transcoded from Bink.
+- **Movies**: the intro, attract and credits movies, played from the
+  disc's Bink files through FFmpeg, and copied off the disc at first launch.
+- **One folder**, `sdmc:/haloce-nx/`, for the app and the game: the first
+  launch extracts everything and restarts itself into the game.
 - **A settings file**, `config.toml`: frame cap, vsync, interpolation, FXAA,
   sharpening, anisotropic filtering, lens flares, the overlay.
 - Saves that keep loading across updates; decals and text that no longer

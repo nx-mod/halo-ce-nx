@@ -110,10 +110,15 @@ code needs a few POSIX functions newlib lacks (`host_nvk_shims.c`).
 
 ## Movies
 
-Bink can't be decoded here, so the movies are `.mjx` transcodes
-(`tools/mjx_pack.py`): baseline JPEG pictures, PCM audio. `bink_mjx.c`
-answers the game's Bink calls; the host decodes each picture
-(`host_mjx.c`, libjpeg is 64-bit only). See `docs/mjx_movies.md`.
+`bink_mjx.c` answers the game's Bink calls from `mjx.c`, which reads either
+a `.mjx` transcode (`tools/mjx_pack.py`, pictures decoded by the host's
+libjpeg in `host_mjx.c`) or, when there is none, the disc's `.bik` through
+the host's FFmpeg (`host_bik.c`: Bink video and audio, sound resampled to
+the 44100 Hz stereo PCM the player takes). FFmpeg paths need a `file:`
+prefix, or `sdmc:` reads as a protocol. The first launch copies the disc's
+`bink` folder beside `maps` (`xiso_extract_folder`) and then restarts
+itself: after extracting, that process could not map the guest's window.
+See `docs/mjx_movies.md`.
 
 ## Traps
 

@@ -5,7 +5,7 @@ Xbox decompilation. Not an emulator — the game's own code runs natively
 on the Switch's CPU, and its Direct3D rendering is translated to OpenGL ES,
 which runs on the Switch's GPU through Vulkan.
 
-**Status: playable.** On real hardware it plays the intro movie, boots to
+**Status: playable.** On real hardware it plays the intro movie from the disc, boots to
 the main menu and plays the campaign with sound and controller input, at
 **60 fps** with interpolation for most of a10 (50–57 in the cryo bay's
 heaviest views). Rendering goes through Vulkan (Zink over NVK), and compiled
@@ -28,15 +28,11 @@ performance overlay running alongside, not from the game.*
 
 1. Copy `host.nro` and `guest.elf` to `sdmc:/haloce-nx/`, the game's own
    folder.
-2. Put your game data there too: either the Xbox disc image
-   as `halo.xiso` (extracted to `maps/` on first launch, which takes a
-   while) or an already-extracted `maps/` folder. Copy the disc's
-   `default.xbe` there too; the loading screen's picture comes from it.
-3. Optional, for the intro, attract and credits movies: convert the
-   disc's `bink/*.bik` files with `tools/mjx_pack.py` and put the results
-   in `sdmc:/haloce-nx/bink/` (see [Movies](#movies)). Without them the
-   game skips its movies, as it always could.
-4. Launch `sdmc:/haloce-nx/host.nro` with full memory: make a
+2. Put your Xbox disc image there too, as `halo.xiso`. The first launch
+   copies its maps, movies and `default.xbe` out of it (a few minutes),
+   then restarts itself straight into the game. An already-extracted
+   `maps/` folder, `bink/` folder and `default.xbe` work too.
+3. Launch `sdmc:/haloce-nx/host.nro` with full memory: make a
    [Sphaira](https://github.com/ITotalJustice/sphaira) forwarder for it (a
    home-menu icon), or open it from a game's title takeover (hold R while
    starting a game). Both run it as an application with the console's
@@ -50,14 +46,13 @@ Saves keep loading across updates: the game state sits at a fixed address
 
 ## Movies
 
-Halo's movies are Bink, which nothing on the Switch can decode, so they are
-converted once on a computer: `tools/mjx_pack.py intro.bik intro.mjx -q 3`
-rewrites every frame as a baseline JPEG and the soundtrack as plain PCM
-(ffmpeg reads Bink). The game plays `.mjx` files through the same Bink
-calls it always made, the host decoding each picture with libjpeg. Five
-are used: `intro`, `attract1`–`attract3` (the main menu, left idle) and
-`credits`. They're 4:3, as on the Xbox. See
-[docs/mjx_movies.md](docs/mjx_movies.md).
+The disc's Bink movies play as they are: the host decodes them with
+FFmpeg, which reads Bink's pictures and sound, and hands them to the game
+through the same Bink calls it always made. Five are used: `intro`,
+`attract1`–`attract3` (the main menu, left idle) and `credits`, from
+`sdmc:/haloce-nx/bink/`. They're 4:3, as on the Xbox. A `.mjx` transcode
+(`tools/mjx_pack.py`, see [docs/mjx_movies.md](docs/mjx_movies.md)) beside
+a `.bik` is played instead, if there is one.
 
 ## Building
 
@@ -83,7 +78,8 @@ make -C port/switch/host -j2
 ```
 
 The host links [nxvk](https://github.com/nx-mod/nxvk)'s OpenGL ES, installed as a
-devkitPro portlib, and devkitPro's `switch-libexpat` and `switch-libjpeg-turbo`.
+devkitPro portlib, and devkitPro's `switch-ffmpeg` (Bink movies),
+`switch-libjpeg-turbo` and `switch-libexpat`.
 Mesa's shader disk cache keeps compiled shaders in
 `sdmc:/haloce-nx/mesa_shader_cache/`, so a shader is compiled once, not every
 session, and `sdmc:/haloce-nx/shader_programs.bin` records every program the game
@@ -163,8 +159,8 @@ frame of the last second, and shader programs linked / compiled fresh.
   [Mesa](https://mesa3d.org)'s NVK Vulkan driver and Zink on the Switch,
   which the host renders through.
 - **[devkitPro](https://devkitpro.org)**, libnx, and its portlibs:
-  libjpeg-turbo (the movies' pictures), expat, and the toolchain.
-- **[FFmpeg](https://ffmpeg.org)**: reads Bink, for `tools/mjx_pack.py`.
+  FFmpeg, libjpeg-turbo, expat, and the toolchain.
+- **[FFmpeg](https://ffmpeg.org)**: plays the Bink movies.
 - **[tomlc17](https://github.com/cktan/tomlc17)**: the `config.toml` parser.
 
 ## License

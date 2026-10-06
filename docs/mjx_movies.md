@@ -1,5 +1,11 @@
 # Movies without Bink: the `.mjx` pipeline
 
+> On Switch the disc's `.bik` files now play directly through FFmpeg
+> (`port/switch/host/source/host_bik.c`), extracted at first launch; a
+> `.mjx` beside a `.bik` is still played first. The rest of this document
+> describes the `.mjx` form, which other ports and pre-converted installs
+> can still use.
+
 Halo's intro and ending movies are Bink, and Bink cannot be decoded here. The
 RAD SDK is proprietary, and the reconstructed `libs/binkxbox` is missing the
 decode math itself (see
