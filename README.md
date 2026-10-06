@@ -4,10 +4,11 @@ A native Nintendo Switch port of **Halo: Combat Evolved**, built from the
 Xbox decompilation. Not an emulator — the game's own code runs natively
 on the Switch's CPU, and its Direct3D rendering is translated to GLES3.
 
-**Status: playable.** On real hardware it boots to the main menu and plays
-the campaign with sound and controller input, at up to 60 fps with
-interpolation (around 30 in heavy combat; see [Settings](#settings)). Still
-rough in places; see
+**Status: playable.** On real hardware it plays the intro movie, boots to
+the main menu and plays the campaign with sound and controller input, at
+**60 fps** with interpolation for most of a10 (50–57 in the cryo bay's
+heaviest views). Rendering goes through Vulkan (Zink over NVK), and compiled
+shaders are kept on the SD card between sessions. Still rough in places; see
 [Known issues](#known-issues) and [PORTING.md](PORTING.md).
 
 **No game data is included.** You need your own Xbox copy of Halo:
@@ -29,10 +30,27 @@ performance overlay running alongside, not from the game.*
    as `halo.xiso` (extracted to `maps/` on first launch, which takes a
    while) or an already-extracted `maps/` folder. Copy the disc's
    `default.xbe` there too; the loading screen's picture comes from it.
-3. Launch it from the homebrew menu.
+3. Optional, for the intro, attract and credits movies: convert the
+   disc's `bink/*.bik` files with `tools/mjx_pack.py` and put the results
+   in `sdmc:/haloce-nx/bink/` (see [Movies](#movies)). Without them the
+   game skips its movies, as it always could.
+4. Launch it from the homebrew menu.
 
-Saves, the map cache and `debug.txt` (the game's own log) go in
-`sdmc:/haloce-nx/`; `host.log` goes beside the NRO.
+Saves, the map cache, `config.toml`, the shader cache and `debug.txt` (the
+game's own log) go in `sdmc:/haloce-nx/`; `host.log` goes beside the NRO.
+Saves keep loading across updates: the game state sits at a fixed address
+(saves made before October 6, 2026 builds don't load in later ones).
+
+## Movies
+
+Halo's movies are Bink, which nothing on the Switch can decode, so they are
+converted once on a computer: `tools/mjx_pack.py intro.bik intro.mjx -q 3`
+rewrites every frame as a baseline JPEG and the soundtrack as plain PCM
+(ffmpeg reads Bink). The game plays `.mjx` files through the same Bink
+calls it always made, the host decoding each picture with libjpeg. Five
+are used: `intro`, `attract1`–`attract3` (the main menu, left idle) and
+`credits`. They're 4:3, as on the Xbox. See
+[docs/mjx_movies.md](docs/mjx_movies.md).
 
 ## Building
 
@@ -85,6 +103,8 @@ in `debug.txt` with the default used instead. Delete the file to start over.
 | `display.fxaa` | `true` | smooths jagged edges (about 1 ms of GPU time) |
 | `display.sharpen` | `0.4` | contrast-adaptive sharpening, `0.0` to `1.0` |
 | `display.anisotropy` | `4` | texture sharpness at a slant: `1` (original), `2`, `4`, `8`, `16` |
+| `display.lens_flares` | `true` | lens flares and the glow around lights |
+| `display.lens_flare_test_every` | `2` | test each light's visibility every Nth frame: `1` is the original, higher is cheaper |
 | `overlay.enabled` | `true` | the frame rate overlay |
 | `overlay.position` | `"top"` | `"top"` or `"bottom"` |
 | `overlay.frame_time` | `true` | the slowest frame of the last second, in ms — where a stutter shows |
@@ -93,24 +113,25 @@ in `debug.txt` with the default used instead. Delete the file to start over.
 | `game.language` | `""` | `"ja"`, `"de"`, `"fr"`, `"es"` or `"it"`; empty for English |
 | `debug.gl_debug` | `false` | logs the GL driver's error messages (slower) |
 | `debug.memory_watch_*` | | how often game memory is rechecked for changes the GPU needs; see the file's comments |
+| `debug.environment` | `""` | `HALO_*` switches for testing, e.g. `"HALO_FRAME_TIMING=300 HALO_RENDER_PROFILE=1"` logs where each frame's time goes |
 
-The overlay reads like `58 FPS  41 MS  212/212`.
+The overlay reads like `60 FPS  21 MS  212/3`: frames a second, the slowest
+frame of the last second, and shader programs linked / compiled fresh.
 
 ## Known issues
 
-- **Hitches the first time an effect appears**: each new shader takes
-  10–70 ms to compile and link. This driver's share group doesn't hand
-  program objects between contexts, it reports no program binary formats,
-  and Mesa's disk cache isn't reachable through nouveau's TGSI path, so
-  there's nowhere to put a compiled program that survives to the next
-  run. Not fixable in software here.
-- Text can look garbled for a moment while it loads, and some letters
-  show a thin box around them.
-- Decals (bullet holes, blood) can still appear late or briefly look wrong.
+- **A hitch the first time a shader is needed.** Compiled shaders are kept
+  in `sdmc:/haloce-nx/mesa_shader_cache/`, so each one is compiled once and
+  not again in later sessions; the overlay's last number counts the fresh
+  ones. A cache filled by one full playthrough could ship with a release so
+  nobody meets them; that, and compiling ahead on the idle third core from
+  the recorded program list, is the work in progress.
+- The picture can look a little darker than expected, and a model was seen
+  to flash dark once; under investigation.
+- Some letters in menu text sometimes show a thin box around them.
 - Shadows look a little off.
-- No intro movies (Bink video isn't supported); the game skips them.
-- Saves made with an older build may not load in a newer one.
 
+## Credits
 ## Credits
 
 - **Bungie** made Halo: Combat Evolved. Halo is a trademark of Microsoft.

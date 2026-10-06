@@ -1409,3 +1409,79 @@ absolute address, fix the accessors, then the ~133 direct-access call
 sites a type-aware audit found (`tools/audit_tag_pointers.py`,
 `tools/tag_pointer_audit.json`) — plus an unscoped project-wide `long`
 audit, likely larger than those 133. Shouldn't be needed now.
+
+## October 6, 2026: from ~20 fps to 60, and what was wrong
+
+Measured with `HALO_FRAME_TIMING=300 HALO_RENDER_PROFILE=1` (set through
+`config.toml`'s `debug.environment`). a10's cryo bay was 50 ms a frame: 2.6
+ms of game tick, 48 of render. Most of the render was waiting, not working,
+and the profile charged the wait to whichever phase touched the GPU next -
+turning lens flares off only moved it into shadows.
+
+- **Uploads waited on the GPU.** Every immediate draw (menu text and
+  widgets, lens flare tests, the HUD) went through `host_gl_buffer_write` as
+  `glBufferSubData` into the frame's stream buffer, which the GPU was still
+  reading, and the driver stalled before each one. The writes never overlap
+  queued reads (the ring rotates per frame behind fences), so they are now
+  mapped `GL_MAP_UNSYNCHRONIZED_BIT`. Render 45-48 ms -> 15-17; menus'
+  `ui_widgets` 20-28 ms -> 4-5.
+- **Visibility queries reused busy objects.** Each lens flare test began its
+  query on the slot's previous object, often still in flight. A ring of free
+  query objects now; tests are also staggered (`display.lens_flare_test_every`).
+- **Interpolation was stubbed off** (`halo_interpolation_enabled` returned
+  0), so at 60 presents every 30 Hz tick was drawn twice, landing unevenly.
+  The config stubs as a whole are gone: `port_config.c` runs here, reading
+  `sdmc:/haloce-nx/config.toml`.
+
+Correctness, all from Switch's memory watch hashing a page at most once a
+frame (no write faults to catch, unlike Linux):
+
+- **Decals vanished or swapped**: every decal batch writes the same buffer
+  many times a frame, and the later batches drew the first one's vertices.
+  Batches now `memory_watch_forget` what they wrote.
+- **Text garbled while loading**: textures and vertex buffers written through
+  `Lock` drew their old contents for a frame or two. `lock_level`, `LockBox`
+  and `D3DVertexBuffer_Lock` now report the range as it is locked.
+
+Crashes and other bugs:
+
+- **`calloc` returned old data**: `do_munmap` of the top region moved the heap
+  cursor back, and the next `mmap` handed that memory out dirty, while musl's
+  `calloc` trusts mmap'd chunks to be zero. Memory below the high-water mark
+  is cleared before reuse.
+- **Saves broke with every build**: the contiguous arena followed the code,
+  so its address moved whenever the program grew. `guest.ld` pins it at
+  `0x41000000`.
+- **Menu crash** in libnx's `_waiterNodeRemove`: every sleeping thread waited
+  on one shared, never-signalled event. Sleeps are `svcSleepThread` now.
+- **Startup failure** (`svcMapMemory (data)` 0xd401): a thread stack could
+  land in the guest's fixed window before it was mapped. The window is
+  reserved with `virtmemAddReservation` before anything is created.
+- **`strtod` crashed**: musl parses through `long double`, quad precision in
+  software with no ILP32 libgcc, so the settings file's first number hit the
+  `__multf3` trap. The guest has a double-only `strtod`.
+- **The overlay drew the game's vertices** (white lines, and the counter
+  flickering): its text rebuild left its own vertex array bound.
+
+## The shader cache: nxvk
+
+The section above on why there is no precompiled pack holds for devkitPro's
+Mesa 20.1 nouveau. The host now links [nxvk](https://github.com/nx-mod/nxvk)
+instead (Zink over the NVK Vulkan driver, Mesa 26; `make MESA20=1` builds the
+old one): same renderer, same frame rate within a few percent, and Mesa's
+shader disk cache works - `sdmc:/haloce-nx/mesa_shader_cache/`, filling as
+the game is played, with one program binary format offered. NVK on GM20B
+needs `NVK_I_WANT_A_BROKEN_VULKAN_DRIVER=1`, and Mesa's utility code needs a
+few POSIX functions newlib lacks (`host_nvk_shims.c`).
+
+`host_shader_stats.c` times each program's compile and link (over 4 ms is a
+fresh compile, the first-time stutter) and records every program linked to
+`sdmc:/haloce-nx/shader_programs.bin`. Next: compile that list on the idle
+third core at boot, and ship a cache filled by a full playthrough.
+
+## Movies
+
+`.mjx` transcodes of the Bink movies, decoded by the host's libjpeg (64-bit
+only, so not linkable into the ILP32 guest); see `docs/mjx_movies.md`.
+`attract_mode.c` looks for the `.bik` before calling `BinkOpen`, so on Switch
+it also accepts the `.mjx` beside it.

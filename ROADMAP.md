@@ -10,50 +10,46 @@ promises: every change is tested on real hardware before it ships.
 The campaign from the main menu, natively on the Switch's CPU, with sound
 and controller input. The game's own Direct3D code runs as a 32-bit-pointer
 guest inside a 64-bit homebrew host, and its rendering is translated to
-GLES3. Presented at 60 fps.
+OpenGL ES.
+
+### Smooth, with movies (October 6, 2026)
+
+- **60 fps** for most of a10 (from about 20): draw uploads no longer wait on
+  the GPU, lens flare tests no longer stall it, and frames really are
+  interpolated between the 30 Hz ticks.
+- **Vulkan underneath**: OpenGL ES through nxvk (Zink over NVK, Mesa 26),
+  with a shader disk cache, so each shader compiles once, not every session.
+- **Movies**: the intro, attract and credits movies, transcoded from Bink.
+- **A settings file**, `config.toml`: frame cap, vsync, interpolation, FXAA,
+  sharpening, anisotropic filtering, lens flares, the overlay.
+- Saves that keep loading across updates; decals and text that no longer
+  flicker or garble; three crashes fixed (menus, startup, interpolation).
+- The Vita fork's 111 fixes since September merged in.
 
 ## Known issues
 
-Listed in the [README](README.md#known-issues). The ones that matter most:
-
-- **A hitch the first time an effect appears.** 10–70 ms per new shader,
-  and this driver offers nowhere to cache a compiled program that survives
-  to the next run. All three routes were built and measured closed; see
-  [PORTING.md](PORTING.md#shaders-why-there-is-no-precompiled-pack).
-- **No intro movies.** Bink video isn't supported; the game skips them.
-- Saves made with an older build may not load in a newer one.
+Listed in the [README](README.md#known-issues).
 
 ## Next
 
-- **Bink video**, so the intro movies and any in-game videos play. The
-  Xbox Bink decoder has been partially decompiled already
-  (`libs/binkxbox/`), so the work is finishing it and wiring it to the
-  video and audio paths — not starting from nothing. Options range from
-  completing that port to transcoding the movies to a format the Switch can
-  already play; the latter is much easier and needs a conversion pass, the
-  former needs no per-video work.
-- **Holding 60 fps in combat.** It presents at 60 but settles near 30,
-  because rendering an interpolated frame costs about what a simulation
-  tick costs. The most promising fix is not re-posing static geometry,
-  which is most of a level.
-- **Text**: garbled for a moment while it loads, and a thin box around some
-  letters.
-- **Decals** can appear late or briefly look wrong.
+- **No first-time shader hitches**: compile the recorded program list
+  (`shader_programs.bin`) on the idle third core at boot, and ship a cache
+  filled by a full playthrough.
+- **Picture brightness** and the dark model flash.
+- **Text**: a thin box around some letters.
 - **Shadows** look a little off.
+- **A native Vulkan renderer**, if the shader work above still leaves
+  hitches: pipelines compiled off the frame, and less CPU per draw.
 
 ## Later
 
-- **The main menu's music**, which the port doesn't currently play.
-- **Fullscreen and resolution options.** It runs at a native 1280x720;
-  there is a downscale lever on fragment cost if 60 fps in combat needs
-  one.
-- **16:9 movies shown at their own aspect ratio**, once there are movies.
+- **Resolution options**, including 1080p docked: the GPU has headroom.
+- **Optional 16:9 movies** (stretched or cropped); they are 4:3 now.
+- **Bloom and colour grading**, alongside FXAA and sharpening.
 
 ## Help wanted
 
 Bug reports with logs are the most useful contribution. The game's own log
 is `sdmc:/haloce-nx/debug.txt`; the host's is `host.log` beside the NRO.
-Pull requests are welcome, especially for performance, and for Bink —
-that's the largest single piece of work left, and a partial decoder that
-plays the existing Xbox `.bik` files directly is more useful than a
-transcode.
+Pull requests are welcome, especially for performance. A Bink decoder that
+plays the disc's `.bik` files directly would retire the `.mjx` transcode.
