@@ -243,3 +243,55 @@ void host_sleep_ns(long long ns)
 	if (ns > 0)
 		svcSleepThread(ns);
 }
+
+/* Threads the host's libraries start (Mesa's driver thread and submit
+queue, its shader compile and disk cache queues, FFmpeg's decoders) go
+through pthread_create, which libnx puts on the process's default core,
+core 0, at the creator's priority: on the game's own core, where a thread
+of equal priority runs only when the game blocks. The game and the driver
+took turns instead of working at once. The link wraps pthread_create
+(Makefile) so they start on core 2, which the game leaves idle. */
+#include <pthread.h>
+#include <stdlib.h>
+
+#define LIBRARY_THREAD_CORE 2
+
+struct library_thread
+{
+	void *(*routine)(void *);
+	void *argument;
+};
+
+int __real_pthread_create(pthread_t *thread, const pthread_attr_t *attributes, void *(*routine)(void *),
+	void *argument);
+
+static void *library_thread_start(void *pointer)
+{
+	struct library_thread start = *(struct library_thread *)pointer;
+
+	free(pointer);
+	svcSetThreadCoreMask(CUR_THREAD_HANDLE, LIBRARY_THREAD_CORE, 1u << LIBRARY_THREAD_CORE);
+	return start.routine(start.argument);
+}
+
+int __wrap_pthread_create(pthread_t *thread, const pthread_attr_t *attributes, void *(*routine)(void *),
+	void *argument)
+{
+	static int logged;
+	struct library_thread *start = malloc(sizeof(*start));
+	int result;
+
+	if (!start)
+		return __real_pthread_create(thread, attributes, routine, argument);
+	start->routine = routine;
+	start->argument = argument;
+	result = __real_pthread_create(thread, attributes, library_thread_start, start);
+	if (result)
+		free(start);
+	else if (!logged)
+	{
+		logged = 1;
+		logf_both("library threads: on core %d\n", LIBRARY_THREAD_CORE);
+	}
+	return result;
+}

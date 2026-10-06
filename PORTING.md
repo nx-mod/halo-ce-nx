@@ -92,7 +92,13 @@ make -C port/switch/host -j2                 # host.nro, on nxvk
   (`display.vsync`, `display.frame_rate`). Interpolation draws between the
   30 Hz ticks; without it the game caps itself at 30. The first frame after
   a map load is not shown (it came out in wrong colours).
-- The present is a post pass (FXAA, sharpening) or a blit.
+- The present is a post pass (FXAA, sharpening) or a blit, stretching the
+  back buffer to the display: `display.render_scale` draws fewer pixels.
+- **Cores.** The game runs on core 0 and its helper threads on core 1.
+  Threads the host's libraries start (Mesa's driver thread and queues,
+  FFmpeg) are moved to core 2 by a wrapped `pthread_create`
+  (`host_threads.c`): libnx would put them on core 0 at the game's
+  priority, where they ran only when the game blocked.
 
 ## Shaders
 
@@ -101,8 +107,8 @@ The host links [nxvk](https://github.com/nx-mod/nxvk) (Zink over NVK, Mesa
 `sdmc:/haloce-nx/mesa_shader_cache/`. `host_shader_stats.c` counts a
 program whose compile and link took over 4 ms as compiled fresh (the
 overlay's last number) and records every program to
-`shader_programs.bin`. Next: compile that list on core 2 at boot, and ship
-a cache filled by a full playthrough. `make MESA20=1` builds the old Mesa
+`shader_programs.bin`, which a thread on core 2 compiles into the cache at
+boot (`display.shader_warmup`). `make MESA20=1` builds the old Mesa
 20.1 host, which can't cache (no program binaries, no shared programs).
 
 NVK on GM20B needs `NVK_I_WANT_A_BROKEN_VULKAN_DRIVER=1`; Mesa's utility
