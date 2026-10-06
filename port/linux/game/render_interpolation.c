@@ -132,6 +132,29 @@ short game_time_get_elapsed(void);
 
 static real_matrix4x3 *tick_pose_node_matrices(long object_index);
 static void tick_pose_frame_begin(void);
+
+static real distance_squared(real_point3d const *a, real_point3d const *b);
+
+/* whether every node kept its place, to within NODE_SNAP_DISTANCE, in
+node reference's frame between the two snapshots */
+static boolean pose_kept(real_matrix4x3 const *previous, real_matrix4x3 const *latest, short node_count,
+	short reference)
+{
+	short node_index;
+
+	for (node_index = 0; node_index < node_count; node_index++)
+	{
+		real_point3d previous_local, latest_local;
+
+		if (node_index == reference)
+			continue;
+		matrix4x3_inverse_transform_point(&previous[reference], &previous[node_index].position, &previous_local);
+		matrix4x3_inverse_transform_point(&latest[reference], &latest[node_index].position, &latest_local);
+		if (!(distance_squared(&previous_local, &latest_local) <= NODE_SNAP_DISTANCE * NODE_SNAP_DISTANCE))
+			return FALSE;
+	}
+	return TRUE;
+}
 static void tick_pose_frame_end(void);
 
 /* ---------- blending */
@@ -469,15 +492,16 @@ real_matrix4x3 *render_interpolation_object_node_matrices(long object_index)
 		boolean snap = !(distance_squared(&previous[0].position, &latest[0].position) <=
 			OBJECT_SNAP_DISTANCE * OBJECT_SNAP_DISTANCE);
 
-		/* halo-ce-universal's interpolation snaps (Tyberious, #53) */
-		for (node_index = 1; !snap && node_index < record->node_count; node_index++)
-		{
-			real_point3d previous_local, latest_local;
-
-			matrix4x3_inverse_transform_point(&previous[0], &previous[node_index].position, &previous_local);
-			matrix4x3_inverse_transform_point(&latest[0], &latest[node_index].position, &latest_local);
-			snap = !(distance_squared(&previous_local, &latest_local) <= NODE_SNAP_DISTANCE * NODE_SNAP_DISTANCE);
-		}
+		/* halo-ce-universal's interpolation snaps (Tyberious, #53), in the
+		root node's frame and, failing that, in node 1's: an object its
+		animation carries (a cutscene's lifeboat: the root stays put, the
+		body travels) moves far from its root every tick but stays the same
+		shape around its body. Snapping it each tick it moved far, blending
+		the rest, drew it jumping and blinking. A new pose changes the
+		shape in both frames. */
+		if (!snap && record->node_count > 1)
+			snap = !pose_kept(previous, latest, record->node_count, 0) &&
+				!(record->node_count > 2 && pose_kept(previous, latest, record->node_count, 1));
 		if (snap)
 		{
 			memcpy(blended, latest, record->node_count * sizeof(real_matrix4x3));
