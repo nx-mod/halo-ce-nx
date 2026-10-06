@@ -83,7 +83,8 @@ ifneq ($(MESA20),1)
 # string lookup, so it is linked whole and its ICD entry point kept
 LIBS	:= -Wl,--whole-archive -lnvk_gl -lnvk -Wl,--no-whole-archive \
 			-Wl,--start-group -lnvk_support -lz -lexpat -Wl,--end-group \
-			-Wl,-u,vk_icdGetInstanceProcAddr -ljpeg -lnx -lstdc++ -lm
+			-Wl,-u,vk_icdGetInstanceProcAddr -ljpeg \
+			-lavformat -lavcodec -lswresample -lavutil -ldav1d -lbz2 -lz -lnx -lstdc++ -lm
 else
 LIBS	:= -lEGL -lGLESv2 -lglapi -ldrm_nouveau -ljpeg -lnx -lstdc++ -lm
 endif

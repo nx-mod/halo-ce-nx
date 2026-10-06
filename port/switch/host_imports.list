@@ -31,6 +31,10 @@ host_video_configure
 host_pin_current_thread
 host_mjx_decode
 host_sleep_ns
+host_bik_open
+host_bik_decode
+host_bik_read_audio
+host_bik_close
 posix_stat
 posix_fstat
 posix_set_file_times

@@ -35,6 +35,44 @@ cannot link it. Reading the file, the index and the audio stays here. */
 #include "mjx_host.h"
 
 extern long host_mjx_decode(unsigned int jpeg, unsigned int length, unsigned int layout);
+extern long host_bik_open(unsigned int path, unsigned int info);
+extern long host_bik_decode(long handle, unsigned int index, unsigned int layout);
+extern long host_bik_read_audio(long handle, unsigned int offset, unsigned int destination, unsigned int length);
+extern void host_bik_close(long handle);
+
+/* No .mjx: the disc's .bik beside where it would be, played by the host
+through FFmpeg (host_bik.c), which answers everything the .mjx header and
+pictures would have. */
+static int mjx_open_bik(struct mjx_movie *movie, const char *name, const char **error)
+{
+	struct mjx_host_movie_info info;
+	char path[256];
+	char *extension;
+
+	snprintf(path, sizeof(path), "%s", name);
+	extension = strrchr(path, '.');
+	if (!extension || strcmp(extension, ".mjx"))
+		return 0;
+	strcpy(extension, ".bik");
+	movie->host_bik = host_bik_open((unsigned int)(unsigned long)path, (unsigned int)(unsigned long)&info);
+	if (!movie->host_bik)
+	{
+		snprintf(movie->message, sizeof(movie->message), "%s", info.message);
+		if (error)
+			*error = movie->message;
+		return 0;
+	}
+	movie->width = info.width;
+	movie->height = info.height;
+	movie->frame_count = info.frame_count;
+	movie->fps_numerator = info.fps_numerator;
+	movie->fps_denominator = info.fps_denominator;
+	movie->audio_rate = info.audio_rate;
+	movie->audio_channels = (unsigned short)info.audio_channels;
+	movie->audio_frames = info.audio_frames;
+	movie->audio_size = info.audio_size;
+	return 1;
+}
 #endif
 
 #define MJX_HEADER_SIZE 48
@@ -91,7 +129,11 @@ int mjx_open(struct mjx_movie *movie, const char *name, const char **error)
 	movie->file = fopen(name, "rb");
 	if (!movie->file)
 	{
-		if (error)
+#ifdef HALO_SWITCH
+		if (mjx_open_bik(movie, name, error))
+			return 1;
+#endif
+		if (error && !*error)
 			*error = "the movie could not be opened";
 		return 0;
 	}
@@ -246,7 +288,8 @@ int mjx_open(struct mjx_movie *movie, const char *name, const char **error)
 #ifdef HALO_SWITCH
 /* this frame's planes, decoded by the host into plane_storage; the storage
  * grows, once, to what the host says the picture needs */
-static int mjx_decode_frame_on_host(struct mjx_movie *movie, const struct mjx_entry *entry, const char **error)
+static int mjx_decode_frame_on_host(struct mjx_movie *movie, const struct mjx_entry *entry, unsigned long index,
+	const char **error)
 {
 	struct mjx_host_layout layout;
 	long result;
@@ -257,8 +300,10 @@ static int mjx_decode_frame_on_host(struct mjx_movie *movie, const struct mjx_en
 		memset(&layout, 0, sizeof(layout));
 		layout.storage = (uint32_t)(unsigned long)movie->plane_storage;
 		layout.storage_size = (uint32_t)movie->plane_storage_size;
-		result = host_mjx_decode((unsigned int)(unsigned long)movie->scratch, (unsigned int)entry->length,
-			(unsigned int)(unsigned long)&layout);
+		result = movie->host_bik ?
+			host_bik_decode(movie->host_bik, (unsigned int)index, (unsigned int)(unsigned long)&layout) :
+			host_mjx_decode((unsigned int)(unsigned long)movie->scratch, (unsigned int)entry->length,
+				(unsigned int)(unsigned long)&layout);
 		if (result <= 0)
 			break;
 		free(movie->plane_storage);
@@ -372,6 +417,11 @@ int mjx_decode_frame(struct mjx_movie *movie, unsigned long index, const char **
 			*error = "the frame number is past the end of the movie";
 		return 0;
 	}
+#ifdef HALO_SWITCH
+	/* (a .bik: no index or file here, the host reads it) */
+	if (movie->host_bik)
+		return mjx_decode_frame_on_host(movie, NULL, index, error);
+#endif
 	entry = &movie->entries[index];
 
 	/* read this picture's bytes into a buffer that is reused from frame to
@@ -399,7 +449,7 @@ int mjx_decode_frame(struct mjx_movie *movie, unsigned long index, const char **
 
 #ifdef HALO_SWITCH
 	(void)jpeg;
-	return mjx_decode_frame_on_host(movie, entry, error);
+	return mjx_decode_frame_on_host(movie, entry, index, error);
 #else
 	if (setjmp(movie->escape))
 	{
@@ -513,6 +563,15 @@ int mjx_decode_frame(struct mjx_movie *movie, unsigned long index, const char **
 unsigned long mjx_read_audio(struct mjx_movie *movie, unsigned long offset,
 	unsigned char *destination, unsigned long length)
 {
+#ifdef HALO_SWITCH
+	if (movie->host_bik)
+	{
+		long got = host_bik_read_audio(movie->host_bik, (unsigned int)offset,
+			(unsigned int)(unsigned long)destination, (unsigned int)length);
+
+		return got > 0 ? (unsigned long)got : 0;
+	}
+#endif
 	if (!movie->audio_size || offset >= movie->audio_size)
 		return 0;
 	if (length > movie->audio_size - offset)
@@ -524,6 +583,13 @@ unsigned long mjx_read_audio(struct mjx_movie *movie, unsigned long offset,
 
 void mjx_close(struct mjx_movie *movie)
 {
+#ifdef HALO_SWITCH
+	if (movie->host_bik)
+	{
+		host_bik_close(movie->host_bik);
+		movie->host_bik = 0;
+	}
+#endif
 #ifndef HALO_SWITCH
 	if (movie->jpeg_created)
 	{

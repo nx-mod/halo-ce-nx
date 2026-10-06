@@ -18,4 +18,9 @@ thread */
 int xiso_extract_maps(const char *image_path, const char *destination, xiso_progress_proc progress, void *context,
 	char *error, int error_size);
 
+/* copies the image's root folder <folder> (e.g. "bink", the movies) into
+<destination>/<folder>, alongside what is already there */
+int xiso_extract_folder(const char *image_path, const char *folder, const char *destination,
+	xiso_progress_proc progress, void *context, char *error, int error_size);
+
 #endif

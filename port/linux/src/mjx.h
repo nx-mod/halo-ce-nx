@@ -89,6 +89,9 @@ struct mjx_movie {
 	char message[JMSG_LENGTH_MAX];
 	int jpeg_created;
 	int opened;                 /* a picture's header has been read and not finished */
+#ifdef HALO_SWITCH
+	long host_bik;              /* a .bik the host plays (host_bik.c), or 0 */
+#endif
 };
 
 #ifdef __cplusplus

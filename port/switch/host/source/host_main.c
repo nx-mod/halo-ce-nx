@@ -183,6 +183,10 @@ static const struct host_function kHostFunctions[] = {
 	{"host_pin_current_thread", (void *)host_pin_current_thread},
 	{"host_mjx_decode", (void *)host_mjx_decode},
 	{"host_sleep_ns", (void *)host_sleep_ns},
+	{"host_bik_open", (void *)host_bik_open},
+	{"host_bik_decode", (void *)host_bik_decode},
+	{"host_bik_read_audio", (void *)host_bik_read_audio},
+	{"host_bik_close", (void *)host_bik_close},
 	{"posix_stat", (void *)posix_stat},
 	{"posix_fstat", (void *)posix_fstat},
 	{"posix_set_file_times", (void *)posix_set_file_times},
@@ -497,6 +501,32 @@ might have on their SD card: GAME_XISO_PATH alone (extracted here on
 first run) or GAME_DATA_DIR/maps already populated some other way
 (skipped here, used as-is) - PORTING.md's "unstub video" notes. */
 /* returns whether the extraction screen was shown */
+/* the disc's movies, the bink folder beside maps (played by host_bik.c):
+once, also for an install whose maps were extracted before movies were */
+static int ensure_movies_extracted(void)
+{
+	struct stat info;
+	char marker[256], error[256] = {0};
+
+	snprintf(marker, sizeof(marker), "%s/bink/.extracted", GAME_DATA_DIR);
+	if (stat(marker, &info) == 0 || stat(GAME_XISO_PATH, &info) != 0)
+		return 0;
+	logf_both("extracting movies from %s to %s/bink ...\n", GAME_XISO_PATH, GAME_DATA_DIR);
+	if (xiso_extract_folder(GAME_XISO_PATH, "bink", GAME_DATA_DIR, extract_game_data_proc, NULL, error, sizeof(error)))
+	{
+		FILE *marker_file = fopen(marker, "w");
+
+		if (marker_file)
+			fclose(marker_file);
+		logf_both("movies extracted.\n");
+	}
+	else
+	{
+		logf_both("movie extraction FAILED: %s\n", error);
+	}
+	return 1;
+}
+
 static int ensure_game_data_extracted(void)
 {
 	struct stat info;
@@ -506,7 +536,7 @@ static int ensure_game_data_extracted(void)
 	if (stat(marker, &info) == 0)
 	{
 		logf_both("game data already extracted at %s/maps\n", GAME_DATA_DIR);
-		return 0;
+		return ensure_movies_extracted();
 	}
 	if (stat(GAME_XISO_PATH, &info) != 0)
 	{
@@ -524,6 +554,7 @@ static int ensure_game_data_extracted(void)
 			if (marker_file)
 				fclose(marker_file);
 			logf_both("extraction done.\n");
+			ensure_movies_extracted();
 		}
 		else
 		{

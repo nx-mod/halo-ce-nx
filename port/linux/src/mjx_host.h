@@ -35,6 +35,23 @@ struct mjx_host_layout
 	char message[160];
 };
 
+/* a .bik the host plays through FFmpeg (host_bik.c), when no .mjx is there:
+what mjx.c's header would have said */
+struct mjx_host_movie_info
+{
+	uint32_t width, height;
+	uint32_t frame_count;
+	uint32_t fps_numerator, fps_denominator;
+	uint32_t audio_rate, audio_channels; /* 44100 and 2, or 0 without sound */
+	uint32_t audio_frames, audio_size;   /* sample frames, and their bytes */
+	char message[160];
+};
+
+/* host_bik_open(path, info) -> a handle, or 0 with info->message;
+host_bik_decode(handle, frame, layout) as host_mjx_decode;
+host_bik_read_audio(handle, offset, destination, length) -> bytes read;
+host_bik_close(handle). Addresses are the guest's. */
+
 /* host_mjx_decode(jpeg, length, layout): 0 decoded; a positive number is
 the storage the picture needs, larger than what was given, with nothing
 decoded; negative failed, with the reason in layout->message. The three
