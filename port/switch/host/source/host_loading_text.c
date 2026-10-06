@@ -393,6 +393,7 @@ void host_fps_draw(int width, int height)
 	}
 	if (!ensure_program())
 		return;
+	host_shader_stats_report();
 	fps = (int)((float)(count - last_count) / elapsed);
 	if (fps < 0)
 		fps = 0;
@@ -410,8 +411,8 @@ void host_fps_draw(int width, int height)
 			length += snprintf(text + length, sizeof(text) - (size_t)length, "  %d MS",
 				(int)(armTicksToNs(s_slowest_ticks) / 1000000ULL));
 		if (g_host_overlay_flags & HOST_OVERLAY_SHADERS)
-			snprintf(text + length, sizeof(text) - (size_t)length, "  %lu/%lu", g_shader_compiles_done,
-				g_shader_compiles);
+			snprintf(text + length, sizeof(text) - (size_t)length, "  %lu/%lu", g_shader_programs,
+				g_shader_misses);
 		s_slowest_ticks = 0;
 	}
 	/* The counter was reported as flashing on and off too fast to read, which

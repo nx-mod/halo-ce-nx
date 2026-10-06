@@ -53,9 +53,17 @@ aarch64-none-elf-gcc -mabi=ilp32 -nostdlib -ffreestanding -Wl,-T,port/switch/gue
   port/switch/guest/guest_pthread_stubs.o port/switch/guest/guest_syscall_cp.o \
   port/switch/guest/build/musl/libc.a -o guest.elf -Wl,-e,__guest_entry
 
-# the host
+# the host: OpenGL ES through nxvk (Zink over the NVK Vulkan driver, Mesa 26)
 make -C port/switch/host -j2
 ```
+
+The host links [nxvk](https://github.com/nx-mod/nxvk)'s OpenGL ES, installed as a
+devkitPro portlib, and devkitPro's `switch-libexpat` and `switch-libjpeg-turbo`.
+Mesa's shader disk cache keeps compiled shaders in
+`sdmc:/haloce-nx/mesa_shader_cache/`, so a shader is compiled once, not every
+session, and `sdmc:/haloce-nx/shader_programs.bin` records every program the game
+has used. `make -C port/switch/host MESA20=1` builds the earlier host on devkitPro's
+Mesa 20.1 instead (`host_mesa20.nro`, no shader cache), for comparison.
 
 `guest.elf` is not produced by Ninja; the link above is the only way to
 make it (see PORTING.md). The guest runtime objects in `port/switch/guest/`
@@ -80,7 +88,7 @@ in `debug.txt` with the default used instead. Delete the file to start over.
 | `overlay.enabled` | `true` | the frame rate overlay |
 | `overlay.position` | `"top"` | `"top"` or `"bottom"` |
 | `overlay.frame_time` | `true` | the slowest frame of the last second, in ms — where a stutter shows |
-| `overlay.shaders` | `true` | shader compiles finished/started; a gap is a hitch in progress |
+| `overlay.shaders` | `true` | programs linked / compiled fresh: the second number is first-time stutter, and stays put once the shader cache is warm |
 | `audio.enabled`, `audio.volume` | `true`, `1.0` | sound, and its volume from 0.0 to 1.0 |
 | `game.language` | `""` | `"ja"`, `"de"`, `"fr"`, `"es"` or `"it"`; empty for English |
 | `debug.gl_debug` | `false` | logs the GL driver's error messages (slower) |

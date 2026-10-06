@@ -45,8 +45,8 @@ original/
 dist/
 invader/
 
-# the ZINK=1 host build (port/switch/host/Makefile)
-build_zink/
+# the MESA20=1 host build (port/switch/host/Makefile)
+build_mesa20/
 *.nro
 *.nacp
 *.elf

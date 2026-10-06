@@ -23,6 +23,14 @@ game asks via glGetShaderiv(GL_COMPILE_STATUS) exactly once per compile, so
 started/finished converge to n/n when the driver is idle and show n/m while
 it still has work outstanding */
 extern volatile unsigned long g_shader_compiles_done;
+
+/* programs linked whose compile and link took more than a cache hit does:
+compiled fresh, the first-time stutter (host_shader_stats.c) */
+extern volatile unsigned long g_shader_misses;
+extern volatile unsigned long g_shader_programs;
+
+/* logs the shader work since its last call, at most once a second */
+void host_shader_stats_report(void);
 /* programs linked, ever: the closest thing to a "total", since the game only
 discovers a program exists when it first needs it */
 extern volatile unsigned long g_shader_programs;

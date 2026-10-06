@@ -40,13 +40,16 @@ include $(DEVKITPRO)/libnx/switch_rules
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
 
-# make ZINK=1: the same host on nxvk's OpenGL ES (Zink over the NVK Vulkan
-# driver, Mesa 26 - github.com/nx-mod/nxvk) instead of devkitPro's Mesa 20.1
-# nouveau. A separate host_zink.nro and build directory, so both can sit
-# beside the one guest.elf and be launched in turn.
-ifeq ($(ZINK),1)
-TARGET		:=	host_zink
-BUILD		:=	build_zink
+# The host runs on nxvk's OpenGL ES: Zink over the NVK Vulkan driver, Mesa 26
+# (github.com/nx-mod/nxvk), whose shader disk cache keeps compiled shaders on
+# the SD card. make MESA20=1 builds the earlier host on devkitPro's Mesa 20.1
+# nouveau instead - no shader cache - as host_mesa20.nro, in its own build
+# directory, for comparison. The driver is a build choice, not a setting:
+# both are whole Mesa builds exporting the same GL entry points.
+ifeq ($(MESA20),1)
+TARGET		:=	host_mesa20
+BUILD		:=	build_mesa20
+else
 DEFINES		+=	-DHOST_ZINK=1
 endif
 SOURCES		:=	source
@@ -56,8 +59,8 @@ INCLUDES	:=	include ../../linux/src source
 
 APP_TITLE	:=	Halo
 APP_AUTHOR	:=	nx-mod
-ifeq ($(ZINK),1)
-APP_TITLE	:=	Halo (Vulkan test)
+ifeq ($(MESA20),1)
+APP_TITLE	:=	Halo (Mesa 20 GL)
 endif
 
 #---------------------------------------------------------------------------------
@@ -75,7 +78,7 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-ifeq ($(ZINK),1)
+ifneq ($(MESA20),1)
 # nxvk-gl.pc's Libs: the driver's dispatch tables are only reached by runtime
 # string lookup, so it is linked whole and its ICD entry point kept
 LIBS	:= -Wl,--whole-archive -lnvk_gl -lnvk -Wl,--no-whole-archive \
