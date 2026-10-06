@@ -2,7 +2,8 @@
 
 A native Nintendo Switch port of **Halo: Combat Evolved**, built from the
 Xbox decompilation. Not an emulator — the game's own code runs natively
-on the Switch's CPU, and its Direct3D rendering is translated to GLES3.
+on the Switch's CPU, and its Direct3D rendering is translated to OpenGL ES,
+which runs on the Switch's GPU through Vulkan.
 
 **Status: playable.** On real hardware it plays the intro movie, boots to
 the main menu and plays the campaign with sound and controller input, at
@@ -91,7 +92,9 @@ Mesa 20.1 instead (`host_mesa20.nro`, no shader cache), for comparison.
 
 `guest.elf` is not produced by Ninja; the link above is the only way to
 make it (see PORTING.md). The guest runtime objects in `port/switch/guest/`
-and its musl are built separately, as PORTING.md describes.
+(`guest_main.o`, `guest_syscall.o`, `guest_platform_stubs.o`, ...) and its
+musl are built separately, as PORTING.md describes: rebuild the one you
+change before linking.
 
 ## Settings
 
@@ -138,7 +141,6 @@ frame of the last second, and shader programs linked / compiled fresh.
 - Shadows look a little off.
 
 ## Credits
-## Credits
 
 - **Bungie** made Halo: Combat Evolved. Halo is a trademark of Microsoft.
 - **[punpckhdq/halo](https://github.com/punpckhdq/halo)** /
@@ -156,11 +158,20 @@ frame of the last second, and shader programs linked / compiled fresh.
   (GPU translation, threading) that fed into the Vita port.
 - **[Invader](https://github.com/SnowyMouse/invader)** by SnowyMouse:
   the tag definitions `tag_layouts.h` is generated from.
+- **[nxvk](https://github.com/nx-mod/nxvk)**, from
+  [PalindromicBreadLoaf/nxvk](https://github.com/PalindromicBreadLoaf/nxvk):
+  [Mesa](https://mesa3d.org)'s NVK Vulkan driver and Zink on the Switch,
+  which the host renders through.
+- **[devkitPro](https://devkitpro.org)**, libnx, and its portlibs:
+  libjpeg-turbo (the movies' pictures), expat, and the toolchain.
+- **[FFmpeg](https://ffmpeg.org)**: reads Bink, for `tools/mjx_pack.py`.
+- **[tomlc17](https://github.com/cktan/tomlc17)**: the `config.toml` parser.
 
 ## License
 
 GPLv3 ([LICENSE](LICENSE)) — `port/linux/src/tag_layouts.h` is generated
-from Invader's GPL-3.0 tag definitions. The decompilation and
+from Invader's GPL-3.0 tag definitions, and the host links NVK (GPL)
+statically. The decompilation and
 halo-ce-universal are CC0 ([LICENSES/CC0-1.0.txt](LICENSES/CC0-1.0.txt)).
 Halo's maps, executable and other game content belong to their owners
 and are not included.
