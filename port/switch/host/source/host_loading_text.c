@@ -63,40 +63,37 @@ static int glyph_segments(char c, struct segment *out)
 		SEG(0, 0, 0, 1); SEG(0, 1, 0.9f, 1); SEG(0.9f, 1, 1, 0.85f); SEG(1, 0.85f, 1, 0.6f);
 		SEG(1, 0.6f, 0.85f, 0.45f); SEG(0.85f, 0.45f, 0, 0.45f);
 		break;
-	/* seven-segment digits: the set of segments is named once, so the numbers
-	stay consistent with each other and no glyph needs more than seven */
-	case '0': SEG(0.2f, 1, 0.8f, 1); SEG(0.15f, 0.75f, 0.15f, 1); SEG(0.85f, 0.75f, 0.85f, 1);
-		SEG(0.2f, 0.5f, 0.8f, 0.5f); SEG(0.15f, 0, 0.15f, 0.25f); SEG(0.85f, 0, 0.85f, 0.25f);
-		SEG(0.2f, 0, 0.8f, 0);
-		break;
-	case '1': SEG(0.85f, 0.75f, 0.85f, 1); SEG(0.85f, 0, 0.85f, 0.25f); break;
-	case '2': SEG(0.2f, 1, 0.8f, 1); SEG(0.85f, 0.75f, 0.85f, 1); SEG(0.2f, 0.5f, 0.8f, 0.5f);
-		SEG(0.15f, 0, 0.15f, 0.25f); SEG(0.2f, 0, 0.8f, 0);
-		break;
-	case '3': SEG(0.2f, 1, 0.8f, 1); SEG(0.85f, 0.75f, 0.85f, 1); SEG(0.2f, 0.5f, 0.8f, 0.5f);
-		SEG(0.85f, 0, 0.85f, 0.25f); SEG(0.2f, 0, 0.8f, 0);
-		break;
-	case '4': SEG(0.15f, 0.75f, 0.15f, 1); SEG(0.85f, 0.75f, 0.85f, 1); SEG(0.2f, 0.5f, 0.8f, 0.5f);
-		SEG(0.85f, 0, 0.85f, 0.25f);
-		break;
-	case '5': SEG(0.2f, 1, 0.8f, 1); SEG(0.15f, 0.75f, 0.15f, 1); SEG(0.2f, 0.5f, 0.8f, 0.5f);
-		SEG(0.85f, 0, 0.85f, 0.25f); SEG(0.2f, 0, 0.8f, 0);
-		break;
-	case '6': SEG(0.2f, 1, 0.8f, 1); SEG(0.15f, 0.75f, 0.15f, 1); SEG(0.2f, 0.5f, 0.8f, 0.5f);
-		SEG(0.15f, 0, 0.15f, 0.25f); SEG(0.85f, 0, 0.85f, 0.25f); SEG(0.2f, 0, 0.8f, 0);
-		break;
-	case '7': SEG(0.2f, 1, 0.8f, 1); SEG(0.85f, 0.75f, 0.85f, 1); SEG(0.85f, 0, 0.85f, 0.25f); break;
-	case '8': SEG(0.2f, 1, 0.8f, 1); SEG(0.15f, 0.75f, 0.15f, 1); SEG(0.85f, 0.75f, 0.85f, 1);
-		SEG(0.2f, 0.5f, 0.8f, 0.5f); SEG(0.15f, 0, 0.15f, 0.25f); SEG(0.85f, 0, 0.85f, 0.25f);
-		SEG(0.2f, 0, 0.8f, 0);
-		break;
-	case '9': SEG(0.2f, 1, 0.8f, 1); SEG(0.15f, 0.75f, 0.15f, 1); SEG(0.85f, 0.75f, 0.85f, 1);
-		SEG(0.2f, 0.5f, 0.8f, 0.5f); SEG(0.85f, 0, 0.85f, 0.25f); SEG(0.2f, 0, 0.8f, 0);
-		break;
+	/* seven-segment digits whose strokes meet at the corners. The verticals
+	were a quarter of the height (0.75-1 and 0-0.25), not a half, which left
+	every digit with a hole either side of its middle. Segments: a top,
+	b upper right, c lower right, d bottom, e lower left, f upper left,
+	g middle. */
+#define SEG_A SEG(0.15f, 1, 0.85f, 1)
+#define SEG_B SEG(0.85f, 0.5f, 0.85f, 1)
+#define SEG_C SEG(0.85f, 0, 0.85f, 0.5f)
+#define SEG_D SEG(0.15f, 0, 0.85f, 0)
+#define SEG_E SEG(0.15f, 0, 0.15f, 0.5f)
+#define SEG_F SEG(0.15f, 0.5f, 0.15f, 1)
+#define SEG_G SEG(0.15f, 0.5f, 0.85f, 0.5f)
+	case '0': SEG_A; SEG_B; SEG_C; SEG_D; SEG_E; SEG_F; break;
+	case '1': SEG_B; SEG_C; break;
+	case '2': SEG_A; SEG_B; SEG_G; SEG_E; SEG_D; break;
+	case '3': SEG_A; SEG_B; SEG_G; SEG_C; SEG_D; break;
+	case '4': SEG_F; SEG_G; SEG_B; SEG_C; break;
+	case '5': case 'S': SEG_A; SEG_F; SEG_G; SEG_C; SEG_D; break;
+	case '6': SEG_A; SEG_F; SEG_G; SEG_E; SEG_C; SEG_D; break;
+	case '7': SEG_A; SEG_B; SEG_C; break;
+	case '8': SEG_A; SEG_B; SEG_C; SEG_D; SEG_E; SEG_F; SEG_G; break;
+	case '9': SEG_A; SEG_B; SEG_C; SEG_D; SEG_F; SEG_G; break;
+	case '/': SEG(0.15f, 0, 0.85f, 1); break;
+#undef SEG_A
+#undef SEG_B
+#undef SEG_C
+#undef SEG_D
+#undef SEG_E
+#undef SEG_F
+#undef SEG_G
 	case '.': SEG(0.35f, 0, 0.65f, 0.05f); break;
-	case 'S': SEG(0.2f, 1, 0.8f, 1); SEG(0.15f, 0.75f, 0.15f, 1); SEG(0.2f, 0.5f, 0.8f, 0.5f);
-		SEG(0.85f, 0, 0.85f, 0.25f); SEG(0.2f, 0, 0.8f, 0);
-		break;
 	case '-': SEG(0.15f, 0.5f, 0.85f, 0.5f); break;
 	case '|': SEG(0.5f, -0.2f, 0.5f, 1.2f); break;
 	default: break;
@@ -281,8 +278,9 @@ static void draw_overlay(const struct overlay_text *overlay, int width, int heig
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 	glUseProgram(s_program);
 	glBindVertexArray(overlay->vao);
-	/* two 1-pixel offsets: slightly bolder strokes without glLineWidth */
-	for (pass = 0; pass < 2; pass++)
+	/* four 1-pixel offsets, across and down: strokes two pixels thick both
+	ways without glLineWidth (two, across only, left the horizontals thin) */
+	for (pass = 0; pass < 4; pass++)
 	{
 		glUniform2f(s_offset_location, (float)(pass & 1) * 2.0f / (float)width,
 			(float)(pass >> 1) * 2.0f / (float)height);
