@@ -171,6 +171,25 @@ const char *attract_mode_get_localized_movie_path(
 		{
 			break;
 		}
+#ifdef HALO_SWITCH
+		/* (port) the movies are .mjx transcodes of the .bik files
+		(docs/mjx_movies.md); the name stays .bik, which BinkOpen
+		(bink_mjx.c) maps to the .mjx beside it */
+		{
+			char packed[NUMBEROF(bss_00453ae8)];
+			char *extension;
+
+			csstrncpy(packed, bss_00453ae8, NUMBEROF(packed));
+			packed[NUMBEROF(packed) - 1] = '\0';
+			extension = strrchr(packed, '.');
+			if (extension && !strcmp(extension, ".bik"))
+			{
+				strcpy(extension, ".mjx");
+				if (file_exists(file_reference_create_from_path(&movie_file, packed, FALSE)))
+					break;
+			}
+		}
+#endif
 
 		attempted_languages|= FLAG(language);
 

@@ -56,6 +56,9 @@ INCLUDES	:=	include ../../linux/src source
 
 APP_TITLE	:=	Halo
 APP_AUTHOR	:=	nx-mod
+ifeq ($(ZINK),1)
+APP_TITLE	:=	Halo (Vulkan test)
+endif
 
 #---------------------------------------------------------------------------------
 # options for code generation
