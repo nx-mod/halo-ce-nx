@@ -113,6 +113,10 @@ static const struct config_setting config_settings[] =
 		"Sharpen the picture, 0.0 (off) to 1.0, adapting to the contrast already\n"
 		"there so edges do not ring. Offsets FXAA's slight softening and the\n"
 		"game's 480-line layout drawn at 720p." },
+	{ "display.shader_warmup", _config_boolean, "true", "HALO_SHADER_WARMUP", _environment_value, _platform_switch,
+		"At start, compile every shader program the game has used before on the\n"
+		"idle third core, into the shader cache, so meeting one in play is not a\n"
+		"stall (sdmc:/haloce-nx/shader_programs.bin lists them)." },
 	{ "display.shadow_resolution", _config_integer, "256", "HALO_SHADOW_RESOLUTION", _environment_value,
 		_platform_switch,
 		"The size of the maps objects' shadows are drawn in: 128 (the Xbox's),\n"

@@ -11,6 +11,7 @@ guest's widened string pointers */
 extern char hostgl_glShaderSource[];
 extern char hostgl_glCompileShader[];
 extern char hostgl_glGetShaderiv[];
+extern char hostgl_glBindAttribLocation[];
 extern char hostgl_glLinkProgram[];
 
 static const struct { const char *name; void *function; } kHostGlFunctions[] = {
@@ -97,7 +98,7 @@ static const struct { const char *name; void *function; } kHostGlFunctions[] = {
 	{"hostgl_glDeleteShader", (void *)glDeleteShader},
 	{"hostgl_glCreateProgram", (void *)glCreateProgram},
 	{"hostgl_glAttachShader", (void *)glAttachShader},
-	{"hostgl_glBindAttribLocation", (void *)glBindAttribLocation},
+	{"hostgl_glBindAttribLocation", (void *)hostgl_glBindAttribLocation},
 	{"hostgl_glLinkProgram", (void *)hostgl_glLinkProgram},
 	{"hostgl_glGetProgramiv", (void *)glGetProgramiv},
 	{"hostgl_glGetProgramInfoLog", (void *)glGetProgramInfoLog},

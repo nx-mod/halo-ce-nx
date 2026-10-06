@@ -13,36 +13,17 @@ Usage: switch_gl_resolve.py gl_imports.list output.c
 import sys
 
 
-# DISABLED 2026-10-05: the shader pack cannot work on this driver, and every
-# mechanism it could have used was measured and found missing:
-#   * cross-context program sharing - the driver allocates program names from
-#     one counter across contexts but does not share the objects, so a name
-#     handed between contexts silently names an unrelated program. This is what
-#     rendered white geometry and missing enemy models.
-#   * program binaries - GL_NUM_PROGRAM_BINARY_FORMATS is 0 on this context,
-#     and neither GL_ARB_get_program_binary nor GL_AMD_shader_binary_format is
-#     present (log: "nouveau / NV120 / OpenGL ES 3.2 Mesa 20.1.0-rc3").
-#   * Mesa's own disk cache - set via MESA_SHADER_CACHE_DISABLE=false and
-#     XDG_CACHE_HOME; no cache directory is ever created, because nouveau
-#     compiles GLSL through TGSI and does not use the NIR disk cache.
-# So there is nowhere for a precompiled program to be built that the game is
-# not already waiting on, and the first-appearance hitch cannot be avoided in
-# software on this hardware. With this empty, hostgl_gl* resolves straight to
-# real GLES3 again, which is where the game worked before the pack existed.
-# host_shader_cache.c is kept, unbuilt, for a driver that does cooperate.
-# hostgl_glShaderSource stays hand-written, and is NOT part of the shader
-# pack: build/switch/gen/guest_gl.c truncates each string pointer to 32 bits
-# before widening it into a 64-bit slot, so the host has to unpack the array
-# itself. Everything else below used to be intercepted for the pack and now
-# goes straight to real GLES3.
-#
-# The three counters in host_shader_stats.c stay intercepted too, but they
-# only forward and bump a number: the frame counter shows the compile stalls,
-# which is otherwise invisible while it happens.
+# The hostgl_ names below are hand-written in host_shader_stats.c, every other
+# one resolves straight to real GLES3. hostgl_glShaderSource is an ABI adapter
+# (build/switch/gen/guest_gl.c truncates each string pointer to 32 bits before
+# widening it into a 64-bit slot, so the host unpacks the array itself); the
+# rest time the game's shader work and record every program it links - its
+# sources and its attribute bindings exactly as made - for the shader warm-up
+# (PORTING.md, "Shaders").
 CACHE_FUNCTIONS = (
     "hostgl_glShaderSource",
     "hostgl_glCompileShader", "hostgl_glGetShaderiv",
-    "hostgl_glLinkProgram",
+    "hostgl_glBindAttribLocation", "hostgl_glLinkProgram",
 )
 
 

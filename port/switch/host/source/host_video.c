@@ -36,7 +36,7 @@ startup/error logging first.
 #include "host_loading_text.h"
 
 void platform_video_drawable_size(int *width, int *height);
-void host_shader_pack_start(EGLDisplay display, EGLConfig config, EGLContext game_context);
+void host_shader_warmup_start(EGLDisplay display, EGLConfig config);
 
 static EGLDisplay s_display = EGL_NO_DISPLAY;
 static EGLSurface s_surface = EGL_NO_SURFACE;
@@ -76,7 +76,7 @@ static void GL_APIENTRY gl_debug_message(GLenum source, GLenum type, GLuint id, 
 
 /* config.toml's display and overlay settings and debug.gl_debug, from the
 guest (d3d8_gl.c) just before it asks for the window */
-static int s_frame_rate = 60, s_vsync = 1, s_gl_debug;
+static int s_frame_rate = 60, s_vsync = 1, s_gl_debug, s_shader_warmup = 1;
 static u64 s_pace_ns;
 int g_host_overlay_flags = HOST_OVERLAY_ENABLED | HOST_OVERLAY_FRAME_TIME | HOST_OVERLAY_SHADERS;
 
@@ -85,7 +85,9 @@ void host_video_configure(int frame_rate, int vsync, int overlay_flags, int gl_d
 	s_frame_rate = frame_rate >= 0 && frame_rate <= 240 ? frame_rate : 60;
 	s_vsync = vsync != 0;
 	g_host_overlay_flags = overlay_flags;
-	s_gl_debug = gl_debug != 0;
+	/* (bit 0 debug.gl_debug, bit 1 display.shader_warmup) */
+	s_gl_debug = (gl_debug & 1) != 0;
+	s_shader_warmup = (gl_debug & 2) != 0;
 	logf_both("settings: frame rate %d, vsync %s, overlay %s%s%s%s, GL debug %s\n", s_frame_rate,
 		s_vsync ? "on" : "off", overlay_flags & HOST_OVERLAY_ENABLED ? "on" : "off",
 		overlay_flags & HOST_OVERLAY_BOTTOM ? " at the bottom" : "",
@@ -167,7 +169,10 @@ int platform_video_initialize(unsigned long width, unsigned long height)
 	tools/switch_gl_resolve.py's CACHE_FUNCTIONS, which is empty for the same
 	reason. Leaving this call in costs ~5 s of startup and writes a
 	shader_pack.bin that nothing can read. */
-	/* host_shader_pack_start(s_display, config, s_context); */
+	/* display.shader_warmup: the recorded programs compiled ahead on core 2
+	into Mesa's cache (host_shader_stats.c) */
+	if (s_shader_warmup)
+		host_shader_warmup_start(s_display, config);
 	/* the driver's own account of any GL call it rejects - the renderer
 	never checks glGetError, so a rejected texture format or vertex
 	attribute fails silently otherwise */

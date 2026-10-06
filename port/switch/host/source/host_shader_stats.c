@@ -33,11 +33,15 @@
 extern void logf_both(const char *fmt, ...);
 
 #define RECORD_PATH "sdmc:/haloce-nx/shader_programs.bin"
-#define RECORD_MAGIC 0x31475053 /* "SPG1" */
+/* "SPG2": bindings as the game made them; an SPG1 file (bindings read back
+from the active attributes, which miss the inactive ones and so never
+matched Mesa's key) is started over */
+#define RECORD_MAGIC 0x32475053
 #define HIT_MS 4.0
 #define MAXIMUM_SHADERS 8192
 #define MAXIMUM_RECORDED 8192
 #define MAXIMUM_ATTRIBUTES 16
+#define MAXIMUM_PROGRAMS 8192
 
 volatile unsigned long g_shader_compiles;
 volatile unsigned long g_shader_compiles_done;
@@ -57,6 +61,17 @@ static struct
 	char *source;
 	u64 ticks;
 } s_shaders[MAXIMUM_SHADERS];
+
+/* per program name: its glBindAttribLocation calls, in order */
+static struct
+{
+	int count;
+	struct
+	{
+		GLuint index;
+		char name[64];
+	} bindings[MAXIMUM_ATTRIBUTES];
+} s_programs[MAXIMUM_PROGRAMS];
 
 static unsigned long long s_recorded[MAXIMUM_RECORDED];
 static int s_recorded_count = -1; /* -1 until the file is read */
@@ -113,7 +128,13 @@ static void record_load(void)
 	s_recorded_count = 0;
 	if (!file)
 		return;
-	if (read_u32(file, &magic) && magic == RECORD_MAGIC)
+	if (!read_u32(file, &magic) || magic != RECORD_MAGIC)
+	{
+		fclose(file);
+		remove(RECORD_PATH);
+		logf_both("shader record: %s was an older format; started over\n", RECORD_PATH);
+		return;
+	}
 	{
 		unsigned long long key;
 		unsigned attributes, index;
@@ -157,7 +178,6 @@ static void record_program(GLuint program)
 	const char *vertex = NULL, *fragment = NULL;
 	char names[MAXIMUM_ATTRIBUTES][64];
 	GLint locations[MAXIMUM_ATTRIBUTES];
-	GLint attribute_count = 0;
 	unsigned long long key = 1469598103934665603ULL;
 	int index, kept = 0;
 	FILE *file;
@@ -179,18 +199,15 @@ static void record_program(GLuint program)
 	}
 	if (!vertex || !fragment)
 		return;
-	/* where the game bound each attribute (glBindAttribLocation before the
-	link): the program's active attributes and their locations now */
-	glGetProgramiv(program, GL_ACTIVE_ATTRIBUTES, &attribute_count);
-	for (index = 0; index < attribute_count && kept < MAXIMUM_ATTRIBUTES; index++)
+	/* the attribute bindings exactly as the game made them, in order */
+	if (program < MAXIMUM_PROGRAMS)
 	{
-		GLint size;
-		GLenum type;
-
-		glGetActiveAttrib(program, (GLuint)index, sizeof(names[kept]), NULL, &size, &type, names[kept]);
-		locations[kept] = glGetAttribLocation(program, names[kept]);
-		if (locations[kept] >= 0)
-			kept++;
+		for (index = 0; index < s_programs[program].count; index++)
+		{
+			snprintf(names[index], sizeof(names[index]), "%s", s_programs[program].bindings[index].name);
+			locations[index] = (GLint)s_programs[program].bindings[index].index;
+		}
+		kept = s_programs[program].count;
 	}
 	key = hash_bytes(key, vertex, strlen(vertex) + 1);
 	key = hash_bytes(key, fragment, strlen(fragment) + 1);
@@ -290,6 +307,19 @@ void hostgl_glGetShaderiv(GLuint shader, GLenum pname, GLint *params)
 		s_shaders[shader].ticks += armGetSystemTick() - start;
 }
 
+void hostgl_glBindAttribLocation(GLuint program, GLuint index, const GLchar *name)
+{
+	if (program < MAXIMUM_PROGRAMS && s_programs[program].count < MAXIMUM_ATTRIBUTES)
+	{
+		int slot = s_programs[program].count++;
+
+		s_programs[program].bindings[slot].index = index;
+		snprintf(s_programs[program].bindings[slot].name, sizeof(s_programs[program].bindings[slot].name), "%s",
+			name);
+	}
+	glBindAttribLocation(program, index, name);
+}
+
 void hostgl_glLinkProgram(GLuint program)
 {
 	u64 start = armGetSystemTick(), ticks;
@@ -318,6 +348,8 @@ void hostgl_glLinkProgram(GLuint program)
 		s_pending_misses++;
 	}
 	record_program(program);
+	if (program < MAXIMUM_PROGRAMS)
+		s_programs[program].count = 0;
 }
 
 /* host_fps_draw, about once a second: the shader work since the last call */
@@ -333,4 +365,162 @@ void host_shader_stats_report(void)
 		s_pending_ticks = 0;
 		s_last_report = now;
 	}
+}
+
+/* ---------- the warm-up
+
+At start, a thread on core 2 (which the game leaves idle) with a GL context
+of its own compiles and links every program in RECORD_PATH, exactly as the
+game made it, and throws it away. It shares nothing with the game: its only
+effect is Mesa's shader disk cache, so that when the game links the same
+program it is a cache hit, not a stall. It runs below the game's priority. */
+
+#include <EGL/egl.h>
+
+#define WARMUP_CORE 2
+#define WARMUP_PRIORITY 0x3B
+#define WARMUP_STACK_SIZE 0x100000
+
+static EGLDisplay s_warmup_display;
+static EGLContext s_warmup_context;
+static unsigned char *s_warmup_data;
+static long s_warmup_size;
+static Thread s_warmup_thread;
+
+/* the next length-prefixed string at *at, NUL terminated in a copy, or NULL */
+static char *take_string(long *at)
+{
+	unsigned length;
+	char *text;
+
+	if (*at + 4 > s_warmup_size)
+		return NULL;
+	memcpy(&length, s_warmup_data + *at, 4);
+	*at += 4;
+	if (length > 0x100000 || *at + (long)length > s_warmup_size || !(text = malloc(length + 1)))
+		return NULL;
+	memcpy(text, s_warmup_data + *at, length);
+	text[length] = 0;
+	*at += length;
+	return text;
+}
+
+static GLuint warmup_compile(GLenum type, const char *source)
+{
+	GLuint shader = glCreateShader(type);
+
+	glShaderSource(shader, 1, &source, NULL);
+	glCompileShader(shader);
+	return shader;
+}
+
+static void warmup_main(void *argument)
+{
+	u64 start = armGetSystemTick();
+	long at = 4;
+	int programs = 0, failed = 0;
+
+	(void)argument;
+	if (!eglMakeCurrent(s_warmup_display, EGL_NO_SURFACE, EGL_NO_SURFACE, s_warmup_context))
+	{
+		logf_both("shader warm-up: no context (0x%x)\n", eglGetError());
+		return;
+	}
+	while (at + 8 <= s_warmup_size)
+	{
+		char *vertex, *fragment;
+		unsigned count, index;
+		GLuint program, shaders[2];
+		GLint linked = 0;
+
+		at += 8; /* the key */
+		vertex = take_string(&at);
+		fragment = vertex ? take_string(&at) : NULL;
+		if (!fragment || at + 4 > s_warmup_size)
+		{
+			free(vertex);
+			free(fragment);
+			break;
+		}
+		memcpy(&count, s_warmup_data + at, 4);
+		at += 4;
+		shaders[0] = warmup_compile(GL_VERTEX_SHADER, vertex);
+		shaders[1] = warmup_compile(GL_FRAGMENT_SHADER, fragment);
+		program = glCreateProgram();
+		glAttachShader(program, shaders[0]);
+		glAttachShader(program, shaders[1]);
+		for (index = 0; index < count && index < MAXIMUM_ATTRIBUTES; index++)
+		{
+			unsigned location;
+			char *name;
+
+			if (at + 4 > s_warmup_size)
+				break;
+			memcpy(&location, s_warmup_data + at, 4);
+			at += 4;
+			name = take_string(&at);
+			if (!name)
+				break;
+			glBindAttribLocation(program, location, name);
+			free(name);
+		}
+		glLinkProgram(program);
+		glGetProgramiv(program, GL_LINK_STATUS, &linked);
+		if (linked)
+			programs++;
+		else
+			failed++;
+		glDeleteProgram(program);
+		glDeleteShader(shaders[0]);
+		glDeleteShader(shaders[1]);
+		free(vertex);
+		free(fragment);
+	}
+	glFinish();
+	logf_both("shader warm-up: %d programs in %.0f ms on core %d%s\n", programs,
+		ticks_ms(armGetSystemTick() - start), WARMUP_CORE, failed ? " (some failed to link)" : "");
+	eglMakeCurrent(s_warmup_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+	eglDestroyContext(s_warmup_display, s_warmup_context);
+	eglReleaseThread();
+	free(s_warmup_data);
+	s_warmup_data = NULL;
+}
+
+/* host_video.c, once the game's context exists (display.shader_warmup) */
+void host_shader_warmup_start(EGLDisplay display, EGLConfig config)
+{
+	static const EGLint attributes[] = { EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 2, EGL_NONE };
+	FILE *file = fopen(RECORD_PATH, "rb");
+	unsigned magic = 0;
+	Result rc;
+
+	if (!file)
+		return;
+	if (fseek(file, 0, SEEK_END) == 0 && (s_warmup_size = ftell(file)) > 8 && fseek(file, 0, SEEK_SET) == 0 &&
+		(s_warmup_data = malloc((size_t)s_warmup_size)) &&
+		fread(s_warmup_data, 1, (size_t)s_warmup_size, file) == (size_t)s_warmup_size)
+	{
+		memcpy(&magic, s_warmup_data, 4);
+	}
+	fclose(file);
+	if (magic != RECORD_MAGIC)
+	{
+		free(s_warmup_data);
+		s_warmup_data = NULL;
+		return;
+	}
+	s_warmup_display = display;
+	s_warmup_context = eglCreateContext(display, config, EGL_NO_CONTEXT, attributes);
+	if (s_warmup_context == EGL_NO_CONTEXT)
+	{
+		logf_both("shader warm-up: no context of its own (0x%x)\n", eglGetError());
+		return;
+	}
+	rc = threadCreate(&s_warmup_thread, warmup_main, NULL, NULL, WARMUP_STACK_SIZE, WARMUP_PRIORITY, WARMUP_CORE);
+	if (R_SUCCEEDED(rc))
+		rc = threadStart(&s_warmup_thread);
+	if (R_FAILED(rc))
+		logf_both("shader warm-up: no thread (0x%x)\n", rc);
+	else
+		logf_both("shader warm-up: %ld bytes of programs, compiling on core %d\n", s_warmup_size, WARMUP_CORE);
 }
