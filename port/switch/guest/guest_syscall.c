@@ -192,17 +192,18 @@ static unsigned long long now_ns(void)
 extern long host_event_create(int auto_clear);
 extern long host_event_wait(long handle, long long timeout_ns);
 
-/* a real wait on a host event nothing ever signals */
+extern void host_sleep_ns(long long ns);
+
+/* A plain sleep (svcSleepThread). It was a timed wait on one host event that
+nothing signalled, shared by every sleeping thread - the vertical blank,
+the mixer, the cache reads - and created lazily by whichever got there
+first: the event's wait list was found corrupt, a crash in libnx's
+_waiterNodeRemove under the vertical blank thread's nanosleep. */
 static void sleep_ns(long long ns)
 {
-	static long event;
-
 	if (ns <= 0)
 		return;
-	if (!event)
-		event = host_event_create(1);
-	if (event)
-		host_event_wait(event, ns);
+	host_sleep_ns(ns);
 }
 
 static long long timespec_ns(const int32_t *ts)

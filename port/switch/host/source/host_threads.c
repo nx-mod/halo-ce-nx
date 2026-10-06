@@ -235,3 +235,11 @@ void host_pin_current_thread(int core)
 	rc = svcSetThreadCoreMask(CUR_THREAD_HANDLE, core, 1u << core);
 	logf_both("host_pin_current_thread: core %d%s\n", core, R_FAILED(rc) ? " (refused)" : "");
 }
+
+/* the guest's nanosleep and friends (guest_syscall.c's sleep_ns): no event,
+nothing shared between the threads that sleep */
+void host_sleep_ns(long long ns)
+{
+	if (ns > 0)
+		svcSleepThread(ns);
+}

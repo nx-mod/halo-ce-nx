@@ -30,6 +30,7 @@ host_loading_text_stop
 host_video_configure
 host_pin_current_thread
 host_mjx_decode
+host_sleep_ns
 posix_stat
 posix_fstat
 posix_set_file_times

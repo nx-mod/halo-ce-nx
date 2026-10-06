@@ -182,6 +182,7 @@ static const struct host_function kHostFunctions[] = {
 	{"host_video_configure", (void *)host_video_configure},
 	{"host_pin_current_thread", (void *)host_pin_current_thread},
 	{"host_mjx_decode", (void *)host_mjx_decode},
+	{"host_sleep_ns", (void *)host_sleep_ns},
 	{"posix_stat", (void *)posix_stat},
 	{"posix_fstat", (void *)posix_fstat},
 	{"posix_set_file_times", (void *)posix_set_file_times},
