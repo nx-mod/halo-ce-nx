@@ -51,6 +51,14 @@ void platform_log(const char *format, ...);
 /* world units (10 feet each) a node may move in one tick before it snaps:
 well beyond any vehicle, short of any teleport */
 #define OBJECT_SNAP_DISTANCE 10.0f
+/* ... and the units a node may move in its root node's frame (the object
+turning or moving counts for nothing there): more is a different pose,
+not the same one moving - an actor waking from dormancy, a model swapped -
+and blending the two stretched vertices across the screen for a tick */
+#define NODE_SNAP_DISTANCE 0.4f
+/* the same for the first-person pose, in the camera's frame (a weapon
+switch, out of zoom or a vehicle) */
+#define FIRST_PERSON_SNAP_DISTANCE 0.25f
 /* a correction's difference left drawn after each tick (of 1) */
 #define CORRECTION_DECAY 0.6f
 /* ... and small enough to be none */
@@ -457,8 +465,20 @@ real_matrix4x3 *render_interpolation_object_node_matrices(long object_index)
 		real_matrix4x3 *blended = record->nodes + 2 * record->node_capacity;
 		short node_index;
 
-		if (distance_squared(&previous[0].position, &latest[0].position) >
-			OBJECT_SNAP_DISTANCE * OBJECT_SNAP_DISTANCE)
+		/* (so written that a position not a number snaps) */
+		boolean snap = !(distance_squared(&previous[0].position, &latest[0].position) <=
+			OBJECT_SNAP_DISTANCE * OBJECT_SNAP_DISTANCE);
+
+		/* halo-ce-universal's interpolation snaps (Tyberious, #53) */
+		for (node_index = 1; !snap && node_index < record->node_count; node_index++)
+		{
+			real_point3d previous_local, latest_local;
+
+			matrix4x3_inverse_transform_point(&previous[0], &previous[node_index].position, &previous_local);
+			matrix4x3_inverse_transform_point(&latest[0], &latest[node_index].position, &latest_local);
+			snap = !(distance_squared(&previous_local, &latest_local) <= NODE_SNAP_DISTANCE * NODE_SNAP_DISTANCE);
+		}
+		if (snap)
 		{
 			memcpy(blended, latest, record->node_count * sizeof(real_matrix4x3));
 		}
@@ -640,6 +660,17 @@ void render_interpolation_first_person(
 	first_person->node_count = node_count;
 	if (!first_person->has_previous)
 		return;
+	/* a node that jumped in the camera's frame is a new pose: drawn as it
+	is (both poses are already in that frame) */
+	for (node_index = 0; node_index < node_count; node_index++)
+	{
+		if (!(distance_squared(&first_person->previous[node_index].position,
+			&first_person->latest[node_index].position) <= FIRST_PERSON_SNAP_DISTANCE * FIRST_PERSON_SNAP_DISTANCE))
+		{
+			first_person->has_previous = FALSE;
+			return;
+		}
+	}
 	/* the pose a tick before the clock: the previous pose is span ticks
 	behind the latest, the clock a fraction of a tick ahead of it */
 	t = ((real)(first_person->span - 1) + first_person_fraction) / (real)first_person->span;
