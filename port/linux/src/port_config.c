@@ -131,6 +131,10 @@ static const struct config_setting config_settings[] =
 		"Test each light's visibility every Nth frame: 1 is every frame (the\n"
 		"original), 2 halves the cost, 3 or 4 cut it further. Flares fade over\n"
 		"several frames, so it does not show." },
+	{ "display.gamma", _config_real, "1.0", "HALO_GAMMA", _environment_value, _platform_switch,
+		"Brightness of the picture's darker parts: 1.0 as drawn, up to 2.0\n"
+		"brighter (1.1-1.3 lifts dark rooms without washing out), down to 0.5\n"
+		"darker." },
 	{ "display.anisotropy", _config_integer, "4", "HALO_ANISOTROPY", _environment_value, _platform_switch,
 		"Texture sharpness at a slant (floors, walls going into the distance):\n"
 		"1 is the original look; 2, 4, 8 or 16 keep them sharper." },

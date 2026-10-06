@@ -3850,6 +3850,7 @@ static const char post_fragment_source[] =
 	"uniform vec2 texel;\n"
 	"uniform float fxaa;\n"
 	"uniform float sharpen;\n"
+	"uniform float gamma;\n"
 	"in vec2 uv;\n"
 	"out vec4 color;\n"
 	"float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }\n"
@@ -3883,15 +3884,18 @@ static const char post_fragment_source[] =
 	"\t\tvec3 weight = -amount * mix(0.125, 0.2, sharpen);\n"
 	"\t\tc = (c + (n + s + e + w) * weight) / (1.0 + 4.0 * weight);\n"
 	"\t}\n"
-	"\tcolor = vec4(clamp(c, 0.0, 1.0), 1.0);\n"
+	"\tc = clamp(c, 0.0, 1.0);\n"
+	/* display.gamma: above 1 lifts the darks, below darkens */
+	"\tif (gamma != 1.0) c = pow(c, vec3(1.0 / gamma));\n"
+	"\tcolor = vec4(c, 1.0);\n"
 	"}\n";
 
 static struct
 {
 	int ready; /* 0 not tried, 1 ready, -1 off or failed */
 	GLuint program, vertex_array, sampler;
-	GLint texel, fxaa, sharpen;
-	float fxaa_value, sharpen_value;
+	GLint texel, fxaa, sharpen, gamma;
+	float fxaa_value, sharpen_value, gamma_value;
 } post_pass;
 
 static BOOL post_pass_prepare(void)
@@ -3908,9 +3912,12 @@ static BOOL post_pass_prepare(void)
 		post_pass.sharpen_value = 0.0f;
 	if (post_pass.sharpen_value > 1.0f)
 		post_pass.sharpen_value = 1.0f;
-	if (post_pass.fxaa_value == 0.0f && post_pass.sharpen_value == 0.0f)
+	post_pass.gamma_value = (float)config_real("display.gamma");
+	if (!(post_pass.gamma_value >= 0.5f && post_pass.gamma_value <= 2.0f))
+		post_pass.gamma_value = 1.0f;
+	if (post_pass.fxaa_value == 0.0f && post_pass.sharpen_value == 0.0f && post_pass.gamma_value == 1.0f)
 	{
-		platform_log("post pass: off (display.fxaa and display.sharpen)");
+		platform_log("post pass: off (display.fxaa, display.sharpen, display.gamma)");
 		return FALSE;
 	}
 	vertex = compile_shader(GL_VERTEX_SHADER, post_vertex_source, "post pass vertex");
@@ -3932,14 +3939,15 @@ static BOOL post_pass_prepare(void)
 	post_pass.texel = glGetUniformLocation(post_pass.program, "texel");
 	post_pass.fxaa = glGetUniformLocation(post_pass.program, "fxaa");
 	post_pass.sharpen = glGetUniformLocation(post_pass.program, "sharpen");
+	post_pass.gamma = glGetUniformLocation(post_pass.program, "gamma");
 	glGenVertexArrays(1, &post_pass.vertex_array);
 	glGenSamplers(1, &post_pass.sampler);
 	glSamplerParameteri(post_pass.sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glSamplerParameteri(post_pass.sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glSamplerParameteri(post_pass.sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glSamplerParameteri(post_pass.sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	platform_log("post pass: FXAA %s, sharpening %.2f", post_pass.fxaa_value > 0.0f ? "on" : "off",
-		post_pass.sharpen_value);
+	platform_log("post pass: FXAA %s, sharpening %.2f, gamma %.2f", post_pass.fxaa_value > 0.0f ? "on" : "off",
+		post_pass.sharpen_value, post_pass.gamma_value);
 	post_pass.ready = 1;
 	return TRUE;
 }
@@ -3963,6 +3971,7 @@ static BOOL post_pass_present(GLuint texture, int source_width, int source_heigh
 	glUniform2f(post_pass.texel, 1.0f / (float)source_width, 1.0f / (float)source_height);
 	glUniform1f(post_pass.fxaa, post_pass.fxaa_value);
 	glUniform1f(post_pass.sharpen, post_pass.sharpen_value);
+	glUniform1f(post_pass.gamma, post_pass.gamma_value);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glBindSampler(0, post_pass.sampler);

@@ -107,6 +107,8 @@ in `debug.txt` with the default used instead. Delete the file to start over.
 | `display.vsync` | `true` | waits for the display; `false` presents at once (tearing), sleeping to the cap if there is one |
 | `display.fxaa` | `true` | smooths jagged edges (about 1 ms of GPU time) |
 | `display.sharpen` | `0.4` | contrast-adaptive sharpening, `0.0` to `1.0` |
+| `display.gamma` | `1.0` | brightness of the darker parts: above `1.0` brighter, below darker |
+| `display.shader_warmup` | `true` | compiles every shader the game has used before on the idle third core at start, so meeting one in play is not a stall |
 | `display.anisotropy` | `4` | texture sharpness at a slant: `1` (original), `2`, `4`, `8`, `16` |
 | `display.shadow_resolution` | `256` | the size objects' shadows are drawn at: `128` (the Xbox's, with stepped edges that crawl), `256`, `512`, `1024` |
 | `display.lens_flares` | `true` | lens flares and the glow around lights |
@@ -132,8 +134,9 @@ frame of the last second, and shader programs linked / compiled fresh.
   ones. A cache filled by one full playthrough could ship with a release so
   nobody meets them; that, and compiling ahead on the idle third core from
   the recorded program list, is the work in progress.
-- The picture can look a little darker than expected, and a model was seen
-  to flash dark once; under investigation.
+- The picture can look a little darker than expected (`display.gamma`
+  brightens it); a model was seen to flash dark once, which interpolation's
+  pose snapping may have fixed.
 - Some letters in menu text sometimes show a thin box around them.
 
 ## Credits
