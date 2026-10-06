@@ -409,7 +409,7 @@ static int load_and_run_guest(const char *path)
 			logf_both("  source %p: region 0x%lx+0x%lx type %u attr %u perm %u\n", gs.data_heap,
 				(unsigned long)memory.addr, (unsigned long)memory.size, memory.type, memory.attr, memory.perm);
 		teardown(&gs);
-		return -1;
+		return -2; /* (the window was not free: worth a fresh process) */
 	}
 	gs.data_view = gs.data_heap; /* now also true at gs.data_vaddr; only used as a "moved" flag */
 
@@ -666,6 +666,41 @@ static const char *app_path(char *buffer, size_t size, const char *name)
 #define GUEST_WINDOW_BASE 0x40000000UL
 #define GUEST_WINDOW_SIZE 0x10000000UL
 
+/* svcMapMemory maps only into the stack region, which the kernel places at
+random each launch; the guest's window is fixed (saves hold its addresses).
+Whether this launch's region covers the window, logged either way. */
+static int guest_window_fits(void)
+{
+	u64 base = 0, size = 0;
+
+	if (R_FAILED(svcGetInfo(&base, InfoType_StackRegionAddress, CUR_PROCESS_HANDLE, 0)) ||
+		R_FAILED(svcGetInfo(&size, InfoType_StackRegionSize, CUR_PROCESS_HANDLE, 0)))
+	{
+		return 1; /* (unknown: try, and let svcMapMemory say) */
+	}
+	logf_both("stack region 0x%lx-0x%lx: the guest's window %s\n", (unsigned long)base, (unsigned long)(base + size),
+		base <= GUEST_WINDOW_BASE && GUEST_WINDOW_BASE + 0xc000000UL <= base + size ? "fits" : "does NOT fit");
+	return base <= GUEST_WINDOW_BASE && GUEST_WINDOW_BASE + 0xc000000UL <= base + size;
+}
+
+/* the loader runs this NRO again with "retry<n>" (three times at most):
+a fresh process, a fresh random layout */
+static int relaunch(int argc, char *argv[], const char *why)
+{
+	int attempt = argc >= 2 && !strncmp(argv[1], "retry", 5) ? atoi(argv[1] + 5) : 0;
+	char arguments[300];
+
+	if (attempt >= 3 || !envHasNextLoad() || argc < 1 || !argv[0])
+		return 0;
+	snprintf(arguments, sizeof(arguments), "%s retry%d", argv[0], attempt + 1);
+	logf_both("%s: starting again (attempt %d)\n", why, attempt + 2);
+	if (g_log)
+		fclose(g_log);
+	envSetNextLoad(argv[0], arguments);
+	consoleExit(NULL);
+	return 1;
+}
+
 int main(int argc, char *argv[])
 {
 	virtmemLock();
@@ -683,6 +718,8 @@ int main(int argc, char *argv[])
 	g_log = fopen(app_path(path, sizeof(path), "host.log"), "w");
 	logf_both("halo-ce-nx host starting in %s\n", s_app_directory);
 
+	if (!guest_window_fits() && relaunch(argc, argv, "this launch's stack region misses the guest's window"))
+		return 0;
 	rename_save_folders();
 	if (ensure_game_data_extracted())
 	{
@@ -705,6 +742,14 @@ int main(int argc, char *argv[])
 
 	{
 		int guest_result = load_and_run_guest(app_path(path, sizeof(path), "guest.elf"));
+
+		/* The kernel lays a process's regions out at random, and now and then
+		the one svcMapMemory maps into ends inside the guest's fixed window
+		(logged above: the free range stopped short of it). A fresh process
+		has a fresh layout: the loader runs this NRO again, three times at
+		most, the attempt carried in its arguments. */
+		if (guest_result == -2 && relaunch(argc, argv, "the guest's window was not free"))
+			return 0;
 
 		/* the guest returned (or never started): failures belong on screen */
 		g_console_echo = 1;

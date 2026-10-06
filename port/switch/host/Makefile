@@ -86,7 +86,8 @@ LIBS	:= -Wl,--whole-archive -lnvk_gl -lnvk -Wl,--no-whole-archive \
 			-Wl,-u,vk_icdGetInstanceProcAddr -ljpeg \
 			-lavformat -lavcodec -lswresample -lavutil -ldav1d -lbz2 -lz -lnx -lstdc++ -lm
 else
-LIBS	:= -lEGL -lGLESv2 -lglapi -ldrm_nouveau -ljpeg -lnx -lstdc++ -lm
+LIBS	:= -lEGL -lGLESv2 -lglapi -ldrm_nouveau -ljpeg \
+			-lavformat -lavcodec -lswresample -lavutil -ldav1d -lbz2 -lz -lnx -lstdc++ -lm
 endif
 
 #---------------------------------------------------------------------------------
