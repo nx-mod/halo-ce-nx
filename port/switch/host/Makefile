@@ -37,17 +37,17 @@ include $(DEVKITPRO)/libnx/switch_rules
 #   of a homebrew executable (.nro). This is intended to be used for sysmodules.
 #   NACP building is skipped as well.
 #---------------------------------------------------------------------------------
-TARGET		:=	$(notdir $(CURDIR))
+TARGET		:=	haloce-nx
 BUILD		:=	build
 
 # The host runs on nxvk's OpenGL ES: Zink over the NVK Vulkan driver, Mesa 26
 # (github.com/nx-mod/nxvk), whose shader disk cache keeps compiled shaders on
 # the SD card. make MESA20=1 builds the earlier host on devkitPro's Mesa 20.1
-# nouveau instead - no shader cache - as host_mesa20.nro, in its own build
+# nouveau instead - no shader cache - as haloce-nx-mesa20.nro, in its own build
 # directory, for comparison. The driver is a build choice, not a setting:
 # both are whole Mesa builds exporting the same GL entry points.
 ifeq ($(MESA20),1)
-TARGET		:=	host_mesa20
+TARGET		:=	haloce-nx-mesa20
 BUILD		:=	build_mesa20
 else
 DEFINES		+=	-DHOST_ZINK=1
@@ -59,6 +59,7 @@ INCLUDES	:=	include ../../linux/src source
 
 APP_TITLE	:=	Halo
 APP_AUTHOR	:=	nx-mod
+APP_VERSION	:=	1.0.0
 ifeq ($(MESA20),1)
 APP_TITLE	:=	Halo (Mesa 20 GL)
 endif

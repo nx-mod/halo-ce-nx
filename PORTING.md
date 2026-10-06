@@ -44,7 +44,7 @@ CF="-mabi=ilp32 -O2 -nostdinc -ffreestanding -std=gnu11 -Iobj/include \
 #   -Ithird_party/musl-1.2.5/src/internal -Ithird_party/musl-1.2.5/src/include
 #   -Ithird_party/musl-1.2.5/include -D__linux__=1 -D__unix__=1
 # then the hand link (README), and:
-make -C port/switch/host -j2                 # host.nro, on nxvk
+make -C port/switch/host -j2                 # haloce-nx.nro, on nxvk
 ```
 
 - The link takes every `.o` under `build/switch/obj`: delete objects of
@@ -59,7 +59,7 @@ make -C port/switch/host -j2                 # host.nro, on nxvk
 
 ## Deploy and debug
 
-- Everything lives in `sdmc:/haloce-nx/`: `host.nro`, `guest.elf`, game
+- Everything lives in `sdmc:/haloce-nx/`: `haloce-nx.nro`, `guest.elf`, game
   data, `config.toml`, saves, shader cache, `debug.txt` (the game's log) and
   `host.log` (the host's; the previous run's is `host.prev.log`).
 - Launch as an application (Sphaira forwarder, or title takeover).
@@ -69,7 +69,7 @@ make -C port/switch/host -j2                 # host.nro, on nxvk
   `HALO_TICK_THREAD=1` runs the tick on core 2 (experimental).
 - Crashes: Atmosphère's report in `atmosphere/crash_reports/` gives PCs as
   `host + 0x…` and raw guest addresses; `aarch64-none-elf-addr2line -f -e`
-  on `port/switch/host/host.elf` or the deployed `guest.elf` names them.
+  on `port/switch/host/haloce-nx.elf` or the deployed `guest.elf` names them.
 - A failed `match_assert` names only itself; `csmemcpy` logs its caller
   when handed NULL.
 

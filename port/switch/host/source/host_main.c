@@ -477,7 +477,7 @@ static int load_and_run_guest(const char *path)
 }
 
 /* sdmc:/haloce-nx/ - the game data (the xiso, the maps extracted from it),
-and by default the app beside it too: host.nro and guest.elf, launched
+and by default the app beside it too: haloce-nx.nro and guest.elf, launched
 from there by a forwarder or the album's title takeover (find_app_directory
 looks wherever the NRO actually is). */
 #define GAME_DATA_DIR "sdmc:/haloce-nx"

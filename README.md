@@ -28,13 +28,13 @@ performance overlay running alongside, not from the game.*
 
 ## Installing
 
-1. Copy `host.nro` and `guest.elf` to `sdmc:/haloce-nx/`, the game's own
+1. Copy `haloce-nx.nro` and `guest.elf` to `sdmc:/haloce-nx/`, the game's own
    folder.
 2. Put your Xbox disc image there too, as `halo.xiso`. The first launch
    copies its maps, movies and `default.xbe` out of it (a few minutes),
    then restarts itself straight into the game. An already-extracted
    `maps/` folder, `bink/` folder and `default.xbe` work too.
-3. Launch `sdmc:/haloce-nx/host.nro` with full memory: make a
+3. Launch `sdmc:/haloce-nx/haloce-nx.nro` with full memory: make a
    [Sphaira](https://github.com/ITotalJustice/sphaira) forwarder for it (a
    home-menu icon), or open it from a game's title takeover (hold R while
    starting a game). Both run it as an application with the console's
@@ -86,7 +86,7 @@ Mesa's shader disk cache keeps compiled shaders in
 `sdmc:/haloce-nx/mesa_shader_cache/`, so a shader is compiled once, not every
 session, and `sdmc:/haloce-nx/shader_programs.bin` records every program the game
 has used. `make -C port/switch/host MESA20=1` builds the earlier host on devkitPro's
-Mesa 20.1 instead (`host_mesa20.nro`, no shader cache), for comparison.
+Mesa 20.1 instead (`haloce-nx-mesa20.nro`, no shader cache), for comparison.
 
 `guest.elf` is not produced by Ninja; the link above is the only way to
 make it (see PORTING.md). The guest runtime objects in `port/switch/guest/`
