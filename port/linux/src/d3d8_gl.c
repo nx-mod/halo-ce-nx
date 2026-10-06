@@ -4008,15 +4008,29 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		screenshot_every = config_integer("debug.screenshot_every");
 
 #ifdef HALO_SWITCH
-	/* the first frame drawn after a map loads (the menu, a new game, a
-	saved game) is not shown: it came out in wrong colours, and with the
-	next frame half a second away (shaders compiling) it stayed up as a
-	whole-screen "negative". The screen keeps what it had. */
+	/* the first frames drawn after a map loads (the menu, a new game, a
+	saved game) are not shown: the first came out in wrong colours, and
+	with the next half a second away (shaders compiling) it stayed up as a
+	whole-screen "negative". Once shaders came from the cache the next
+	frames came at once, and memory the load wrote into pages the watch
+	checks every other frame could still be stale in the second: a brief
+	flash. Now all of memory is checked again at the change and the
+	screen keeps what it had for HIDDEN_FRAMES_AFTER_LOAD frames. */
+#define HIDDEN_FRAMES_AFTER_LOAD 3
 	extern unsigned long halo_map_generation;
 	static unsigned long shown_generation;
-	BOOL hide_frame = shown_generation != halo_map_generation;
+	static int frames_to_hide;
+	BOOL hide_frame;
 
-	shown_generation = halo_map_generation;
+	if (shown_generation != halo_map_generation)
+	{
+		shown_generation = halo_map_generation;
+		frames_to_hide = HIDDEN_FRAMES_AFTER_LOAD;
+		memory_watch_forget((void *)PLATFORM_CONTIGUOUS_BASE, PLATFORM_CONTIGUOUS_SIZE);
+	}
+	hide_frame = frames_to_hide > 0;
+	if (hide_frame)
+		frames_to_hide--;
 #endif
 	if (device.gl_ready)
 	{
