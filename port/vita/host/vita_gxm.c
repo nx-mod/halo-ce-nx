@@ -157,10 +157,14 @@ struct target
 	SceGxmColorSurface color;
 	SceGxmDepthStencilSurface depth_stencil;
 	SceGxmRenderTarget *render_target;
+	/* a cell of an atlas (vgxm_target_create_cell): the atlas target's id
+	(its memory, surface and render target object), and where in it the
+	cell lies; 0 for a target of its own */
+	unsigned int atlas, cell_x, cell_y;
 };
 
 #define MAXIMUM_SHADERS 8192
-#define MAXIMUM_TARGETS 128
+#define MAXIMUM_TARGETS 256
 
 static unsigned int gxm_scene_count, gxm_scene_splits;
 static unsigned int scene_histogram[128];
@@ -216,11 +220,15 @@ static struct
 	struct target targets[MAXIMUM_TARGETS];
 	unsigned int target_count;
 
-	/* the scene being recorded */
+	/* the scene being recorded (an atlas's when the colour target is a
+	cell of it: scene_cell is that cell) */
 	int in_scene;
 	unsigned int scene_draws;
-	unsigned long scene_color, scene_depth;
+	unsigned long scene_color, scene_depth, scene_cell;
 	unsigned long wanted_color, wanted_depth;
+	/* a draw samples a cell of the open atlas scene that another cell's
+	draws in it wrote: the scene is begun again, waiting */
+	int sampled_cell_conflict;
 
 	/* render to texture (scene_dependency_needed): the game scenes' serial
 	numbers, the last scene begun with SCE_GXM_SCENE_VERTEX_WAIT_FOR_DEPENDENCY,
@@ -1545,8 +1553,23 @@ void vgxm_texture_set_sampler(struct vgxm_texture *texture, unsigned long min_fi
 	/* cube maps address as they must */
 	if (sceGxmTextureGetType(gxm_texture) != SCE_GXM_TEXTURE_CUBE)
 	{
-		sceGxmTextureSetUAddrMode(gxm_texture, modes[address_u < 6 ? address_u : 0]);
-		sceGxmTextureSetVAddrMode(gxm_texture, modes[address_v < 6 ? address_v : 0]);
+		SceGxmTextureAddrMode u = modes[address_u < 6 ? address_u : 0], v = modes[address_v < 6 ? address_v : 0];
+		int result_u = sceGxmTextureSetUAddrMode(gxm_texture, u), result_v = sceGxmTextureSetVAddrMode(gxm_texture, v);
+
+		if (result_u < 0 || result_v < 0)
+		{
+			/* (an address mode the library refuses for the texture's
+			type keeps the one it had: logged, a few times) */
+			static unsigned int reported;
+
+			if (reported < 8)
+			{
+				reported++;
+				log_line("gxm: address mode %d/%d refused for a %ux%u texture of type %08x: 0x%08x 0x%08x", (int)u, (int)v,
+					sceGxmTextureGetWidth(gxm_texture), sceGxmTextureGetHeight(gxm_texture),
+					(unsigned)sceGxmTextureGetType(gxm_texture), (unsigned)result_u, (unsigned)result_v);
+			}
+		}
 	}
 }
 
@@ -1753,8 +1776,39 @@ static int target_make(struct target *target, unsigned long width, unsigned long
 		}
 		if (texture)
 		{
-			result = sceGxmTextureInitLinearStrided((SceGxmTexture *)texture, target->memory.base,
-				SCE_GXM_TEXTURE_FORMAT_U8U8U8U8_ARGB, target->width, target->height, target->stride * 4);
+			/* a power-of-two target whose rows are ALIGN(width, 8) texels
+			apart (32 and more wide) is described as a LINEAR texture, the
+			type of every texture in the texture cache, which the hardware
+			samples with D3DTADDRESS_WRAP everywhere. A LINEAR_STRIDED
+			texture is the SGX's stride texture, made for clamped copies.
+			The water's 128x128 ripple map is the one target the game samples
+			with WRAP, at 25-50 repeats: with a single level (c10's swamp,
+			#23) or a chain that could not be made (b30 in #20's log) it was
+			strided, and on the hardware only the reflection drew the cube
+			map as a mirror (Vita3K with the ripple map clamped draws the
+			photos' dark trunk shapes). Same memory either way.
+			HALO_TARGET_TEXTURE_LINEAR=0: every target strided, as before */
+			static int linear_targets = -1;
+
+			if (linear_targets < 0)
+			{
+				const char *setting = getenv("HALO_TARGET_TEXTURE_LINEAR");
+
+				linear_targets = !setting || atoi(setting) != 0;
+				if (!linear_targets)
+					log_line("gxm: render targets sampled as strided textures (HALO_TARGET_TEXTURE_LINEAR=0)");
+			}
+			if (linear_targets && !(target->width & (target->width - 1)) && !(target->height & (target->height - 1)) &&
+				target->stride == ALIGN(target->width, 8))
+			{
+				result = sceGxmTextureInitLinear((SceGxmTexture *)texture, target->memory.base,
+					SCE_GXM_TEXTURE_FORMAT_U8U8U8U8_ARGB, target->width, target->height, 1);
+			}
+			else
+			{
+				result = sceGxmTextureInitLinearStrided((SceGxmTexture *)texture, target->memory.base,
+					SCE_GXM_TEXTURE_FORMAT_U8U8U8U8_ARGB, target->width, target->height, target->stride * 4);
+			}
 			if (result < 0)
 				log_line("gxm: target texture %lux%lu: 0x%08x", width, height, (unsigned)result);
 		}
@@ -1785,6 +1839,108 @@ unsigned long vgxm_target_create(unsigned long width, unsigned long height, int 
 	return ++gxm.target_count;
 }
 
+/* Atlases: a small colour surface the game draws many copies of a frame
+(the object shadows and their blurs, a copy per object:
+d3d8_gxm.c render_target_get_version) gets one target holding
+ATLAS_COLUMNS x ATLAS_ROWS cells, a copy in each. The copies' draws then go
+to one scene, each cell's through the viewport and region clip moved to
+the cell, instead of a scene, a render target object and a scene switch
+each; a cell is sampled through a texture over its own pixels (linear,
+strided as the atlas), which filters and addresses exactly as the copy's
+own target did. HALO_TARGET_ATLAS=0: a target per copy, as before. */
+#define ATLAS_COLUMNS 6
+#define ATLAS_ROWS 4
+#define MAXIMUM_ATLASES 6
+
+static struct
+{
+	unsigned long key, width, height;
+	unsigned int id;
+	unsigned int cells[ATLAS_COLUMNS * ATLAS_ROWS];
+} atlases[MAXIMUM_ATLASES];
+
+static int target_atlas_enabled(void)
+{
+	static int enabled = -1;
+
+	if (enabled < 0)
+	{
+		const char *setting = getenv("HALO_TARGET_ATLAS");
+
+		enabled = !setting || atoi(setting) != 0;
+		if (!enabled)
+			log_line("gxm: a target for every copy of a small target (HALO_TARGET_ATLAS=0)");
+	}
+	return enabled;
+}
+
+unsigned long vgxm_target_create_cell(unsigned long key, unsigned long index, unsigned long width, unsigned long height,
+	struct vgxm_texture *texture)
+{
+	unsigned int atlas, slot;
+	struct target *cell, *parent;
+	int result;
+
+	if (!gxm.ready || !target_atlas_enabled() || !width || !height || width > 128 || height > 128 || index < 1 ||
+		index > ATLAS_COLUMNS * ATLAS_ROWS)
+		return 0;
+	for (atlas = 0; atlas < MAXIMUM_ATLASES; atlas++)
+		if (atlases[atlas].id && atlases[atlas].key == key && atlases[atlas].width == width && atlases[atlas].height == height)
+			break;
+	if (atlas == MAXIMUM_ATLASES)
+	{
+		for (atlas = 0; atlas < MAXIMUM_ATLASES && atlases[atlas].id; atlas++)
+			;
+		if (atlas == MAXIMUM_ATLASES || gxm.target_count >= MAXIMUM_TARGETS)
+			return 0;
+		if (!target_make(&gxm.targets[gxm.target_count], width * ATLAS_COLUMNS, height * ATLAS_ROWS, 0, NULL))
+			return 0;
+		memset(&atlases[atlas], 0, sizeof(atlases[atlas]));
+		atlases[atlas].key = key;
+		atlases[atlas].width = width;
+		atlases[atlas].height = height;
+		atlases[atlas].id = ++gxm.target_count;
+		log_line("gxm: an atlas of %ux%u cells of %lux%lu (target %u)", ATLAS_COLUMNS, ATLAS_ROWS, width, height,
+			atlases[atlas].id);
+	}
+	parent = &gxm.targets[atlases[atlas].id - 1];
+	if (atlases[atlas].cells[index - 1])
+	{
+		/* (asked again: the same cell) */
+		slot = atlases[atlas].cells[index - 1] - 1;
+		cell = &gxm.targets[slot];
+	}
+	else
+	{
+		if (gxm.target_count >= MAXIMUM_TARGETS)
+			return 0;
+		slot = gxm.target_count;
+		cell = &gxm.targets[slot];
+		memset(cell, 0, sizeof(*cell));
+		cell->width = (unsigned int)width;
+		cell->height = (unsigned int)height;
+		cell->stride = parent->stride;
+		cell->atlas = atlases[atlas].id;
+		cell->cell_x = (unsigned int)(((index - 1) % ATLAS_COLUMNS) * width);
+		cell->cell_y = (unsigned int)(((index - 1) / ATLAS_COLUMNS) * height);
+	}
+	if (texture)
+	{
+		result = sceGxmTextureInitLinearStrided((SceGxmTexture *)texture,
+			(unsigned char *)parent->memory.base + 4 * (cell->cell_y * parent->stride + cell->cell_x),
+			SCE_GXM_TEXTURE_FORMAT_U8U8U8U8_ARGB, cell->width, cell->height, parent->stride * 4);
+		if (result < 0)
+		{
+			log_line("gxm: cell texture %lux%lu: 0x%08x", width, height, (unsigned)result);
+			memset(cell, 0, sizeof(*cell));
+			return 0;
+		}
+	}
+	if (!atlases[atlas].cells[index - 1])
+		atlases[atlas].cells[index - 1] = ++gxm.target_count;
+	return atlases[atlas].cells[index - 1];
+}
+
 int vgxm_target_remake(unsigned long id, unsigned long width, unsigned long height, int depth,
 	struct vgxm_texture *texture)
 {
@@ -1794,8 +1950,10 @@ int vgxm_target_remake(unsigned long id, unsigned long width, unsigned long heig
 		return 0;
 	target = &gxm.targets[id - 1];
 	/* (never the scene being recorded: a target is remade only once
-	nothing has used it for hundreds of frames) */
-	if (gxm.in_scene && (gxm.scene_color == id || gxm.scene_depth == id))
+	nothing has used it for hundreds of frames; never a cell of an atlas) */
+	if (gxm.in_scene && (gxm.scene_color == id || gxm.scene_depth == id || gxm.scene_cell == id))
+		return 0;
+	if (target->atlas)
 		return 0;
 	target_release(target);
 	if (!target_make(target, width, height, depth, texture))
@@ -1948,10 +2106,28 @@ static int rtt_sync_enabled(void)
 	return enabled;
 }
 
+void vgxm_debug_name_target(unsigned long id, unsigned long long name)
+{
+	(void)id;
+	(void)name;
+}
+
 void vgxm_note_sampled_target(unsigned long id)
 {
 	if (id && id <= gxm.target_count && gxm.targets[id - 1].written_serial > gxm.sampled_serial)
 		gxm.sampled_serial = gxm.targets[id - 1].written_serial;
+	/* (another cell of the atlas being drawn, drawn in this scene: what its
+	draws wrote may not be there yet) */
+	if (id && id <= gxm.target_count && gxm.targets[id - 1].atlas && gxm.in_scene &&
+		gxm.targets[id - 1].atlas == gxm.scene_color && id != gxm.wanted_color &&
+		gxm.targets[id - 1].written_serial == gxm.scene_serial)
+		gxm.sampled_cell_conflict = 1;
+}
+
+/* the target a scene for this colour target is begun on: its atlas for a cell */
+static unsigned long scene_target(unsigned long color)
+{
+	return color && color <= gxm.target_count && gxm.targets[color - 1].atlas ? gxm.targets[color - 1].atlas : color;
 }
 
 /* whether the next draw's scene must wait for the scenes before it: it
@@ -1963,6 +2139,8 @@ static int scene_dependency_needed(unsigned int open_serial)
 {
 	if (!rtt_sync_enabled())
 		return 0;
+	if (gxm.sampled_cell_conflict)
+		return 1;
 	if (gxm.sampled_serial && gxm.sampled_serial >= gxm.wait_serial && gxm.sampled_serial != open_serial)
 		return 1;
 	return !open_serial && gxm.texture_scene_since_wait && gxm.wanted_color && gxm.wanted_color == gxm.presented_target;
@@ -1975,15 +2153,16 @@ static int scene_ensure(void)
 	int result;
 
 	unsigned int scene_flags = 0;
+	unsigned long wanted_scene_color = scene_target(gxm.wanted_color);
 
-	if (gxm.in_scene && gxm.scene_color == gxm.wanted_color && gxm.scene_depth == gxm.wanted_depth &&
+	if (gxm.in_scene && gxm.scene_color == wanted_scene_color && gxm.scene_depth == gxm.wanted_depth &&
 		scene_dependency_needed(gxm.scene_serial))
 	{
 		/* (an open scene samples what a scene before it drew, with no
 		wait between: begun again, waiting) */
 		gxm.dependency_splits++;
 	}
-	else if (gxm.in_scene && gxm.scene_color == gxm.wanted_color && gxm.scene_depth == gxm.wanted_depth)
+	else if (gxm.in_scene && gxm.scene_color == wanted_scene_color && gxm.scene_depth == gxm.wanted_depth)
 	{
 		/* HALO_GXM_SCENE_DRAWS (default 300): a scene with this many draws
 		is ended and begun again on the same targets, so its primitives fit
@@ -1998,7 +2177,19 @@ static int scene_ensure(void)
 			scene_draw_limit = setting ? atoi(setting) : 300;
 		}
 		if (scene_draw_limit <= 0 || gxm.scene_draws < (unsigned int)scene_draw_limit)
+		{
+			unsigned long cell = wanted_scene_color != gxm.wanted_color ? gxm.wanted_color : 0;
+
+			if (cell != gxm.scene_cell)
+			{
+				/* (another cell of the atlas: its own viewport and clip) */
+				gxm.scene_cell = cell;
+				shadow_invalidate();
+			}
+			if (gxm.scene_cell)
+				gxm.targets[gxm.scene_cell - 1].written_serial = gxm.scene_serial;
 			return 1;
+		}
 		gxm_scene_splits++;
 	}
 	if (gxm.in_scene)
@@ -2009,7 +2200,7 @@ static int scene_ensure(void)
 		scene_switch_us[gxm.scene_color == 1 ? 0 : 1] += sceKernelGetProcessTimeWide() - before;
 		gxm.in_scene = 0;
 	}
-	color = gxm.wanted_color ? &gxm.targets[gxm.wanted_color - 1] : NULL;
+	color = wanted_scene_color ? &gxm.targets[wanted_scene_color - 1] : NULL;
 	depth = gxm.wanted_depth ? &gxm.targets[gxm.wanted_depth - 1] : NULL;
 	if (!color && !depth)
 		return 0;
@@ -2064,12 +2255,15 @@ static int scene_ensure(void)
 		depth->written_serial = gxm.scene_serial;
 	{
 		/* which targets the scenes are for (the report at present) */
-		unsigned int slot = (unsigned int)(gxm.wanted_color ? gxm.wanted_color : gxm.wanted_depth + 64) % 128;
+		unsigned int slot = (unsigned int)(wanted_scene_color ? wanted_scene_color : gxm.wanted_depth + 64) % 128;
 
 		scene_histogram[slot]++;
 	}
 	shadow_invalidate();
-	gxm.scene_color = gxm.wanted_color;
+	gxm.scene_color = wanted_scene_color;
+	gxm.scene_cell = wanted_scene_color != gxm.wanted_color ? gxm.wanted_color : 0;
+	if (gxm.scene_cell)
+		gxm.targets[gxm.scene_cell - 1].written_serial = gxm.scene_serial;
 	gxm.scene_depth = gxm.wanted_depth;
 	sceGxmSetViewportEnable(gxm.context, SCE_GXM_VIEWPORT_ENABLED);
 	return 1;
@@ -2082,6 +2276,7 @@ static int scene_ensure_sampling(void)
 	int result = scene_ensure();
 
 	gxm.sampled_serial = 0;
+	gxm.sampled_cell_conflict = 0;
 	return result;
 }
 
@@ -2240,6 +2435,33 @@ static void shadow_invalidate(void)
 	memset(shadow.clip, 0xff, sizeof(shadow.clip));
 }
 
+/* a draw into a cell of an atlas: its viewport moved to the cell, its clip
+kept to the cell and moved with it (offsets of whole cells: the same
+pixels, sample positions and clip as in a target of its own) */
+static void cell_place(float viewport[6], long clip[4])
+{
+	const struct target *cell = &gxm.targets[gxm.scene_cell - 1];
+
+	viewport[0] += (float)cell->cell_x;
+	viewport[1] += (float)cell->cell_y;
+	if (clip[0] < 0)
+		clip[0] = 0;
+	if (clip[1] < 0)
+		clip[1] = 0;
+	if (clip[2] > (long)cell->width)
+		clip[2] = (long)cell->width;
+	if (clip[3] > (long)cell->height)
+		clip[3] = (long)cell->height;
+	if (clip[2] < clip[0])
+		clip[2] = clip[0];
+	if (clip[3] < clip[1])
+		clip[3] = clip[1];
+	clip[0] += (long)cell->cell_x;
+	clip[2] += (long)cell->cell_x;
+	clip[1] += (long)cell->cell_y;
+	clip[3] += (long)cell->cell_y;
+}
+
 void vgxm_draw(const struct vgxm_draw *draw)
 {
 	struct vertex_program_key key;
@@ -2389,8 +2611,28 @@ void vgxm_draw(const struct vgxm_draw *draw)
 			shadow.cull = cull;
 			sceGxmSetCullMode(gxm.context, (SceGxmCullMode)cull);
 		}
-		bias[0] = (int)draw->depth_bias_slope;
-		bias[1] = (int)draw->depth_bias_units;
+		{
+			/* (debug, #26 effects flicker) HALO_GXM_DEPTH_BIAS=<scale>: the
+			draws' depth bias (D3DRS_ZBIAS as polygon offset: the effects'
+			particles, the decals) times this; 0 = none. Unset: as the game
+			sets it. For telling on the hardware whether the SGX takes the
+			units on another scale than the Xbox's, which the emulator
+			cannot show */
+			static float bias_scale = -1.0f;
+
+			if (bias_scale < 0.0f)
+			{
+				const char *setting = getenv("HALO_GXM_DEPTH_BIAS");
+
+				bias_scale = setting && *setting ? (float)atof(setting) : 1.0f;
+				if (bias_scale < 0.0f)
+					bias_scale = 1.0f;
+				if (setting && *setting)
+					log_line("gxm: depth bias times %.2f (HALO_GXM_DEPTH_BIAS)", bias_scale);
+			}
+			bias[0] = (int)(draw->depth_bias_slope * bias_scale);
+			bias[1] = (int)(draw->depth_bias_units * bias_scale);
+		}
 		if (shadow.bias[0] != bias[0] || shadow.bias[1] != bias[1])
 		{
 			shadow.bias[0] = bias[0];
@@ -2401,6 +2643,7 @@ void vgxm_draw(const struct vgxm_draw *draw)
 			/* (the viewport in the target's pixels: scaled with it) */
 			float scale = scene_scale();
 			float viewport[6];
+			long clip[4];
 
 			viewport[0] = draw->viewport_offset[0] * scale;
 			viewport[1] = draw->viewport_offset[1] * scale;
@@ -2408,16 +2651,19 @@ void vgxm_draw(const struct vgxm_draw *draw)
 			viewport[3] = draw->viewport_scale[0] * scale;
 			viewport[4] = draw->viewport_scale[1] * scale;
 			viewport[5] = draw->viewport_scale[2];
+			memcpy(clip, draw->clip, sizeof(clip));
+			if (gxm.scene_cell)
+				cell_place(viewport, clip);
 			if (memcmp(shadow.viewport, viewport, sizeof(viewport)))
 			{
 				memcpy(shadow.viewport, viewport, sizeof(viewport));
 				sceGxmSetViewport(gxm.context, viewport[0], viewport[3], viewport[1], viewport[4], viewport[2], viewport[5]);
 			}
-			if (memcmp(shadow.clip, draw->clip, sizeof(shadow.clip)) || shadow.clip_scale != scale)
+			if (memcmp(shadow.clip, clip, sizeof(shadow.clip)) || shadow.clip_scale != scale)
 			{
-				memcpy(shadow.clip, draw->clip, sizeof(shadow.clip));
+				memcpy(shadow.clip, clip, sizeof(shadow.clip));
 				shadow.clip_scale = scale;
-				set_clip(draw->clip);
+				set_clip(clip);
 			}
 		}
 	}
@@ -2463,7 +2709,8 @@ void vgxm_clear(unsigned long flags, unsigned long color, float depth, unsigned 
 
 	if (!gxm.ready || !scene_ensure_sampling())
 		return;
-	target = gxm.scene_color ? &gxm.targets[gxm.scene_color - 1] : &gxm.targets[gxm.scene_depth - 1];
+	target = gxm.scene_cell ? &gxm.targets[gxm.scene_cell - 1] :
+		gxm.scene_color ? &gxm.targets[gxm.scene_color - 1] : &gxm.targets[gxm.scene_depth - 1];
 	width = target->width;
 	height = target->height;
 	if (flags & D3DCLEAR_TARGET_R) mask |= SCE_GXM_COLOR_MASK_R;
@@ -2550,8 +2797,16 @@ void vgxm_clear(unsigned long flags, unsigned long color, float depth, unsigned 
 	}
 	sceGxmSetCullMode(gxm.context, SCE_GXM_CULL_NONE);
 	sceGxmSetFrontDepthBias(gxm.context, 0, 0);
-	sceGxmSetViewport(gxm.context, width * 0.5f, width * 0.5f, height * 0.5f, -(float)height * 0.5f, 0.0f, 1.0f);
-	set_clip(clip);
+	{
+		float viewport[6] = { width * 0.5f, height * 0.5f, 0.0f, width * 0.5f, -(float)height * 0.5f, 1.0f };
+		long placed[4];
+
+		memcpy(placed, clip, sizeof(placed));
+		if (gxm.scene_cell)
+			cell_place(viewport, placed);
+		sceGxmSetViewport(gxm.context, viewport[0], viewport[3], viewport[1], viewport[4], viewport[2], viewport[5]);
+		set_clip(placed);
+	}
 	sceGxmDraw(gxm.context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, 4);
 	gxm.scene_draws++;
 }

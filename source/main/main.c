@@ -866,6 +866,25 @@ short game_connection(
 	return main_globals.connection;
 }
 
+#ifdef HALO_LINUX
+/* (port) whether the arrays data.c holds to the Xbox's sizes are held now:
+a local game, unless HALO_XBOX_PARTICLE_LIMITS=0 (data.c datum_new_limit) */
+int halo_local_limits_active(void)
+{
+	static int enabled = -1;
+
+	if (enabled < 0)
+	{
+		extern char *getenv(const char *name);
+		extern int atoi(const char *text);
+		const char *setting = getenv("HALO_XBOX_PARTICLE_LIMITS");
+
+		enabled = !setting || atoi(setting) != 0;
+	}
+	return enabled && game_connection() == _game_connection_local;
+}
+#endif
+
 void main_disallow_persistent_storage(
 	void)
 {
@@ -1451,6 +1470,10 @@ short main_get_window_count(
 	return single_window ? 1 : PIN(local_player_count(), 1, MAXIMUM_WINDOWS);
 }
 
+#ifdef HALO_LINUX
+static void main_checkpoint_log_new_map(void);
+#endif
+
 static void main_new_map(
 	struct game_options *options)
 {
@@ -1463,6 +1486,7 @@ static void main_new_map(
 	input_flush();
 #ifdef HALO_LINUX
 	platform_log("new map: loading");
+	main_checkpoint_log_new_map();
 	game_load_started = halo_load_profile_now();
 	loaded = game_load(options);
 	halo_load_profile_add(_halo_load_game_load, game_load_started, 0);
@@ -1638,7 +1662,16 @@ char const *game_unsafe_to_save_reason(char *buffer, long size);
 static unsigned long checkpoint_log_lines;
 static long checkpoint_wait_checks;
 
-#define CHECKPOINT_LOG_LINES 96
+/* (the most checkpoint lines a map logs: the count was for the session, and
+a long session spent it before the level that needed it - BlazeRed17's
+d20 and d40 used up all 96 before the Warthog run of d40, GitHub #10) */
+#define CHECKPOINT_LOG_LINES 160
+
+static void main_checkpoint_log_new_map(
+	void)
+{
+	checkpoint_log_lines = 0;
+}
 
 static void main_checkpoint_asked(
 	char const *how)
