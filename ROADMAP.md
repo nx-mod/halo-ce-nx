@@ -35,14 +35,19 @@ Listed in the [README](README.md#known-issues).
 
 ## Next
 
-- **No first-time shader hitches**: compile the recorded program list
-  (`shader_programs.bin`) on the idle third core at boot, and ship a cache
-  filled by a full playthrough.
-- **Picture brightness** and the dark model flash.
-- **Text**: a thin box around some letters.
-- **Shadows** look a little off.
-- **A native Vulkan renderer**, if the shader work above still leaves
-  hitches: pipelines compiled off the frame, and less CPU per draw.
+- **Big battles at 60**: they run 30-45 fps. Being tried: the game alone
+  on core 0 with the driver's threads on core 2, and `display.render_scale`
+  for the GPU-bound moments.
+- **A native renderer, optional** (`display.renderer = "gl" | "webgpu"`,
+  GL by default until it is complete), to drop Zink's GL-to-Vulkan layer
+  and its CPU cost per draw. Built the way nx-mod's GameCube/Wii ports
+  draw: [aurora-nx](https://github.com/nx-mod/aurora-nx) (console GPU to
+  WebGPU, as reference for pipeline caching, recording and texture
+  conversion) on [dawn-nx](https://github.com/nx-mod/dawn-nx) and
+  [vulkan-nx](https://github.com/nx-mod/vulkan-nx). It lives in the 64-bit
+  host, since WebGPU's and Vulkan's structs hold pointers the 32-bit game
+  cannot share: the game hands it a compact list of each frame's draws.
+- **Ship a filled shader cache** from a full playthrough.
 
 ## Later
 
@@ -54,5 +59,4 @@ Listed in the [README](README.md#known-issues).
 
 Bug reports with logs are the most useful contribution. The game's own log
 is `sdmc:/haloce-nx/debug.txt`; the host's is `host.log` beside the NRO.
-Pull requests are welcome, especially for performance. A Bink decoder that
-plays the disc's `.bik` files directly would retire the `.mjx` transcode.
+Pull requests are welcome, especially for performance.
