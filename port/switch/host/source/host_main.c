@@ -717,6 +717,17 @@ int main(int argc, char *argv[])
 	rename(app_path(path, sizeof(path), "host.log"), app_path(path2, sizeof(path2), "host.prev.log"));
 	g_log = fopen(app_path(path, sizeof(path), "host.log"), "w");
 	logf_both("halo-ce-nx host starting in %s\n", s_app_directory);
+	{
+		/* The loader starts this thread, which becomes the game's, on
+		whatever core its own settings say (core 2 going by the load seen on
+		it), not the
+		core 0 the rest of the host plans around (the game's helper threads
+		go to the other cores, Mesa's to core 2: host_threads.c). */
+		int core = (int)svcGetCurrentProcessorNumber();
+		Result rc = svcSetThreadCoreMask(CUR_THREAD_HANDLE, 0, 1u << 0);
+
+		logf_both("main thread: started on core %d, now on core 0%s\n", core, R_FAILED(rc) ? " (refused)" : "");
+	}
 
 	if (!guest_window_fits() && relaunch(argc, argv, "this launch's stack region misses the guest's window"))
 		return 0;
