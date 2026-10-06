@@ -574,8 +574,20 @@ static void start_heartbeat(void)
 		logf_both("heartbeat: could not start, rc=0x%x\n", rc);
 }
 
+/* The guest's fixed window (guest.ld: code at 0x40000000, the data segment
+and its heap up to __guest_image_end, 0x4c000000 today). libnx places
+thread stacks and other mappings at random in the same region, so a stack
+could land inside the window before the guest was mapped there: then
+svcMapMemory (data) failed with 0xd401 and the run ended at the loading
+text. Reserved before anything is created, nothing else is put there. */
+#define GUEST_WINDOW_BASE 0x40000000UL
+#define GUEST_WINDOW_SIZE 0x10000000UL
+
 int main(int argc, char *argv[])
 {
+	virtmemLock();
+	virtmemAddReservation((void *)GUEST_WINDOW_BASE, GUEST_WINDOW_SIZE);
+	virtmemUnlock();
 	consoleInit(NULL);
 
 	host_loading_text_console();
