@@ -537,6 +537,24 @@ static int ensure_movies_extracted(void)
 	return 1;
 }
 
+/* the save folders as the guest names them now (xbox_files.c): an older
+install's single-letter ones are renamed, once */
+static void rename_save_folders(void)
+{
+	static const char *const renames[][2] = { {"u", "profiles"}, {"z", "save_and_cache"} };
+	char from[256], to[256];
+	struct stat info;
+	int index;
+
+	for (index = 0; index < 2; index++)
+	{
+		snprintf(from, sizeof(from), "%s/%s", GAME_DATA_DIR, renames[index][0]);
+		snprintf(to, sizeof(to), "%s/%s", GAME_DATA_DIR, renames[index][1]);
+		if (stat(from, &info) == 0 && stat(to, &info) != 0)
+			logf_both("save folders: %s -> %s: %s\n", from, to, rename(from, to) == 0 ? "renamed" : "FAILED");
+	}
+}
+
 static int ensure_game_data_extracted(void)
 {
 	struct stat info;
@@ -665,6 +683,7 @@ int main(int argc, char *argv[])
 	g_log = fopen(app_path(path, sizeof(path), "host.log"), "w");
 	logf_both("halo-ce-nx host starting in %s\n", s_app_directory);
 
+	rename_save_folders();
 	if (ensure_game_data_extracted())
 	{
 		/* Extracting gigabytes left this process unable to map the guest's

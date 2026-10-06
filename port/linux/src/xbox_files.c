@@ -192,6 +192,17 @@ void platform_translate_path(const char *xbox_path, char *host_path, unsigned lo
 		{
 			struct posix_file_information information;
 
+#ifdef HALO_SWITCH
+			/* (port) the two drives a player looks in, named for what they
+			hold: u:\ the profiles and their saved-game records, z:\ the
+			campaign save and the map cache. host_main.c renames an older
+			install's u and z folders to these. */
+			if (drive == 'u')
+				snprintf(resolved, sizeof(resolved), "%s/profiles", platform_save_root());
+			else if (drive == 'z')
+				snprintf(resolved, sizeof(resolved), "%s/save_and_cache", platform_save_root());
+			else
+#endif
 			snprintf(resolved, sizeof(resolved), "%s/%c", platform_save_root(), drive);
 			/* every Xbox drive always exists; create its directory on first use */
 			if (posix_stat(resolved, &information) != 0)
