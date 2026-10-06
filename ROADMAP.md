@@ -49,6 +49,45 @@ Listed in the [README](README.md#known-issues).
   cannot share: the game hands it a compact list of each frame's draws.
 - **Ship a filled shader cache** from a full playthrough.
 
+## The clean native port
+
+Where this is going: a clean, fast, native port with the Switch's own
+implementations throughout. Done on a branch off `switch`, merged a stage at
+a time, each stage playing at least as well as before.
+
+1. **A Switch-owned platform layer.** Video, audio, input, files, threads,
+   memory and settings as `port/switch` modules behind one interface. Today
+   the Switch build leans on the Linux port's layer (33k lines) and borrows
+   the other ports' tools and names (`android_imports.py`,
+   `android_gl_stubs.py`, `vita_build.py`, `vita_host_*`). Dead parts go:
+   the Mesa 20 build, the text demo, unused stubs, the `.mjx` path.
+2. **A renderer interface**, the GL renderer one backend behind it and the
+   native one above (on WebGPU) beside it. The case for it, measured in a
+   battle: 69 object draws cost 3.3 ms of CPU, about 47 us each, nearly all
+   of it the GL-on-Zink path.
+3. **A coarse boundary between game and host**: a frame's draw list, an
+   audio buffer and an input snapshot cross it, not hundreds of single GL
+   calls. Cleaner, and the host can work on one frame while the game builds
+   the next.
+4. **One 64-bit program**, no guest. The largest step by far, and why it is
+   last:
+   - Map files are loaded as they are on disc, and their tag data holds
+     32-bit pointers inside the game's structures (`struct tag_block`,
+     `struct tag_reference`): under 64 bits those structures change size.
+     Maps would be converted at load, driven by the game's own tag field
+     definitions, into 64-bit layouts.
+   - `long` is 64 bits on 64-bit Switch: the game's headers use it 3,300
+     times, 700+ as fields of its data. Each becomes an explicit 32-bit
+     type where the layout matters.
+   - Saves are a snapshot of game memory, pointers included (why the
+     arena is pinned at `0x41000000`): saves would need a new format or a
+     conversion, and old saves would not carry over as they are.
+   - It touches most of `source/`, which makes merging the Vita fork's
+     work much harder from then on.
+
+   Stages 1-3 get most of the speed and the cleanliness; this one is
+   about the last of both.
+
 ## Later
 
 - **Resolution options**, including 1080p docked: the GPU has headroom.
