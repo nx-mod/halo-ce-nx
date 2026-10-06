@@ -77,8 +77,13 @@ static int stream_open(struct bik_stream *stream, const char *path, enum AVMedia
 {
 	const AVCodec *decoder = NULL;
 
+	char url[300];
+
 	memset(stream, 0, sizeof(*stream));
-	if (avformat_open_input(&stream->format, path, NULL, NULL) < 0)
+	/* "file:" first: FFmpeg reads what is before the first colon as a
+	protocol, and "sdmc" is none it knows */
+	snprintf(url, sizeof(url), "file:%s", path);
+	if (avformat_open_input(&stream->format, url, NULL, NULL) < 0)
 	{
 		snprintf(message, message_size, "could not open %s", path);
 		return 0;

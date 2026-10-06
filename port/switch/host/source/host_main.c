@@ -397,7 +397,17 @@ static int load_and_run_guest(const char *path)
 	rc = svcMapMemory((void *)(uintptr_t)gs.data_vaddr, gs.data_heap, gs.data_size);
 	if (R_FAILED(rc))
 	{
+		MemoryInfo memory;
+		u32 page;
+
 		logf_both("svcMapMemory (data) FAILED, rc=0x%x\n", rc);
+		/* what the window and the source were, for next time */
+		if (R_SUCCEEDED(svcQueryMemory(&memory, &page, gs.data_vaddr)))
+			logf_both("  at 0x%x: region 0x%lx+0x%lx type %u attr %u perm %u\n", gs.data_vaddr,
+				(unsigned long)memory.addr, (unsigned long)memory.size, memory.type, memory.attr, memory.perm);
+		if (R_SUCCEEDED(svcQueryMemory(&memory, &page, (u64)(uintptr_t)gs.data_heap)))
+			logf_both("  source %p: region 0x%lx+0x%lx type %u attr %u perm %u\n", gs.data_heap,
+				(unsigned long)memory.addr, (unsigned long)memory.size, memory.type, memory.attr, memory.perm);
 		teardown(&gs);
 		return -1;
 	}
@@ -656,7 +666,22 @@ int main(int argc, char *argv[])
 	logf_both("halo-ce-nx host starting in %s\n", s_app_directory);
 
 	if (ensure_game_data_extracted())
+	{
+		/* Extracting gigabytes left this process unable to map the guest's
+		window (svcMapMemory 0xd401, after the reservation above), so the
+		game starts in a fresh one: the loader runs this NRO again as soon as
+		this one exits, straight into the game. */
+		if (envHasNextLoad() && argc >= 1 && argv[0])
+		{
+			logf_both("extraction finished: starting again, into the game\n");
+			if (g_log)
+				fclose(g_log);
+			envSetNextLoad(argv[0], argv[0]);
+			consoleExit(NULL);
+			return 0;
+		}
 		host_loading_text_console(); /* the extraction screen replaced it */
+	}
 	start_heartbeat();
 
 	{
