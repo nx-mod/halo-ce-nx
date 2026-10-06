@@ -5,11 +5,13 @@ Xbox decompilation. Not an emulator — the game's own code runs natively
 on the Switch's CPU, and its Direct3D rendering is translated to OpenGL ES,
 which runs on the Switch's GPU through Vulkan.
 
-**Status: playable.** On real hardware it plays the intro movie from the disc, boots to
-the main menu and plays the campaign with sound and controller input, at
-**60 fps** with interpolation for most of a10 (50–57 in the cryo bay's
-heaviest views). Rendering goes through Vulkan (Zink over NVK), and compiled
-shaders are kept on the SD card between sessions. Still rough in places; see
+**Status: playable.** On real hardware it plays the intro movie from the
+disc, boots to the main menu and plays the campaign with sound and controller
+input. It holds **60 fps** walking and in light fighting, but **big battles
+drop to 30–45 fps**: the game's simulation and the renderer share one CPU core
+and the GPU is busy too, and that is the next thing being worked on.
+Rendering goes through Vulkan (Zink over NVK), and compiled shaders are kept
+on the SD card between sessions. Still rough in places; see
 [Known issues](#known-issues) and [PORTING.md](PORTING.md).
 
 **No game data is included.** You need your own Xbox copy of Halo:
@@ -128,12 +130,18 @@ frame of the last second, and shader programs linked / compiled fresh.
 
 ## Known issues
 
+- **Big battles run at 30–45 fps**, not 60. In a heavy fight a frame takes
+  25–30 ms: 4–7 for the game's simulation (on the same core as the
+  renderer), 4–6 for the models, 2–5 for the shadows, and the rest largely
+  waiting on the GPU. Running the simulation on the idle third core is the
+  first step being tried (`HALO_TICK_THREAD=1` in `debug.environment`,
+  experimental).
 - **A hitch the first time a shader is needed.** Compiled shaders are kept
-  in `sdmc:/haloce-nx/mesa_shader_cache/`, so each one is compiled once and
-  not again in later sessions; the overlay's last number counts the fresh
-  ones. A cache filled by one full playthrough could ship with a release so
-  nobody meets them; that, and compiling ahead on the idle third core from
-  the recorded program list, is the work in progress.
+  in `sdmc:/haloce-nx/mesa_shader_cache/`, and every program the game has
+  used is compiled ahead on the idle third core at each start
+  (`display.shader_warmup`), so a hitch is only ever met once; the
+  overlay's last number counts them. A cache filled by one full
+  playthrough could ship with a release so nobody meets any.
 - The picture can look a little darker than expected (`display.gamma`
   brightens it); a model was seen to flash dark once, which interpolation's
   pose snapping may have fixed.
